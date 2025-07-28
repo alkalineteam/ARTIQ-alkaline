@@ -423,6 +423,11 @@
               # You can uncomment these one by one to see which ones work:
               (python.withPackages (ps: [ ps.scikit-learn ]))
               (python.withPackages (ps: [ ps.torch ]))
+              (python.withPackages (ps: [ ps.pandas ]))
+              (python.withPackages (ps: [ ps.matplotlib ]))
+              (python.withPackages (ps: [ ps.scipy ]))
+              (python.withPackages (ps: [ ps.jupyter ]))
+              (python.withPackages (ps: [ ps.requests ]))
               (python.withPackages (ps: [ ps.plotly ]))
               (python.withPackages (ps: [ ps.seaborn ]))
               (python.withPackages (ps: [ ps.mypy ]))
