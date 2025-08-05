@@ -1,0 +1,146 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "artiq-fork"
+dynamic = ["version"]
+description = "ARTIQ Fork - Custom extensions and modifications"
+readme = "README.md"
+license = {text = "LGPL-3.0-or-later"}
+authors = [
+    {name = "ARTIQ Fork Contributors"},
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: System :: Hardware",
+]
+requires-python = ">=3.13"
+dependencies = [
+    # Core scientific computing
+    "numpy",
+    "scipy",
+    "pandas>=2.3.1",
+    # ARTIQ-related dependencies that might be useful
+    "python-dateutil",
+    "prettytable",
+    "pyserial",
+    "h5py",
+    "tqdm",
+    "lmdb",
+    "jsonschema",
+    "platformdirs",
+    "rich>=14.1.0",
+    "requests>=2.32.4",
+    # Development and utility packages
+    "colorama",
+    "jinja2",
+    "msgpack",
+    "regex",
+    "plotly>=6.2.0",
+    "scikit-learn>=1.7.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "black",
+    "flake8",
+    "mypy",
+    "jupyter",
+    "ipython",
+]
+
+analysis = [
+    "sympy",
+    "astropy",
+    "uncertainties",
+    "lmfit",
+]
+
+visualization = [
+    "plotly",
+    "bokeh",
+    "seaborn",
+    "pyqtgraph",  # This might conflict with ARTIQ's version
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/artiq-fork"
+Repository = "https://github.com/your-org/artiq-fork"
+Issues = "https://github.com/your-org/artiq-fork/issues"
+
+[tool.setuptools]
+zip-safe = false
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["artiq_fork*"]
+
+[tool.setuptools.package-data]
+artiq_fork = [
+    "*.json",
+    "*.yaml",
+    "*.yml",
+    "config/*",
+]
+
+# Black code formatting
+[tool.black]
+line-length = 88
+target-version = ['py313']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+# pytest configuration
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers"
+testpaths = [
+    "tests",
+]
+python_files = [
+    "test_*.py",
+    "*_test.py",
+]
+
+# MyPy type checking
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[dependency-groups]
+dev = [
+    "jupyter>=1.1.1",
+]
