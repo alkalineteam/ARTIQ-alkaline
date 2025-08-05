@@ -69,6 +69,8 @@
           (final: prev: {
             # Just inherit ARTIQ directly - this is simpler and more reliable
             inherit (artiq.packages.${system}) artiq migen misoc asyncserial microscope;
+            # sipyco comes from a different input in the ARTIQ flake
+            sipyco = artiq.inputs.sipyco.packages.${system}.sipyco;
           })
         ]
       )
@@ -92,6 +94,8 @@
 
       # Expose individual ARTIQ packages
       inherit (artiq.packages.${system}) artiq migen misoc asyncserial microscope;
+      # sipyco comes from ARTIQ's input
+      sipyco = artiq.inputs.sipyco.packages.${system}.sipyco;
       inherit (artiq.packages.${system}) vivadoEnv vivado openocd-bscanspi;
     };
 
@@ -124,18 +128,11 @@
       full-stack = if workspace != null then
         # When uv.lock exists, create uv2nix development environment
         let
-          # Create editable overlay for local development
-          editableOverlay = workspace.mkEditablePyprojectOverlay {
-            root = "$REPO_ROOT";
-            # Add any local packages here if needed
-            # members = [ "your-local-package" ];
+          # Use the workspace to create virtual environment with all dependencies from uv.lock
+          virtualenv = workspace.mkVirtualEnv {
+            environ = pythonSet;
+            name = "artiq-fork-dev-env";
           };
-
-          # Override with editable support
-          editablePythonSet = pythonSet.overrideScope editableOverlay;
-
-          # Create virtual environment with all dependencies
-          virtualenv = editablePythonSet.mkVirtualEnv "artiq-fork-dev-env" workspace.deps.all;
 
         in pkgs.mkShell {
           name = "artiq-fork-uv2nix-shell";
@@ -172,14 +169,15 @@
             export PATH="${virtualenv}/bin:$PATH"
             
             # Add ARTIQ packages to PYTHONPATH so they're available alongside uv2nix packages
-            export PYTHONPATH="${editablePythonSet.artiq}/${python.sitePackages}:$PYTHONPATH"
-            export PYTHONPATH="${editablePythonSet.migen}/${python.sitePackages}:$PYTHONPATH"
-            export PYTHONPATH="${editablePythonSet.misoc}/${python.sitePackages}:$PYTHONPATH"
-            export PYTHONPATH="${editablePythonSet.asyncserial}/${python.sitePackages}:$PYTHONPATH"
-            export PYTHONPATH="${editablePythonSet.microscope}/${python.sitePackages}:$PYTHONPATH"
+            export PYTHONPATH="${pythonSet.artiq}/${python.sitePackages}:$PYTHONPATH"
+            export PYTHONPATH="${pythonSet.migen}/${python.sitePackages}:$PYTHONPATH"
+            export PYTHONPATH="${pythonSet.misoc}/${python.sitePackages}:$PYTHONPATH"
+            export PYTHONPATH="${pythonSet.asyncserial}/${python.sitePackages}:$PYTHONPATH"
+            export PYTHONPATH="${pythonSet.microscope}/${python.sitePackages}:$PYTHONPATH"
+            export PYTHONPATH="${pythonSet.sipyco}/${python.sitePackages}:$PYTHONPATH"
             
-            # Add ARTIQ executables to PATH
-            export PATH="${editablePythonSet.artiq}/bin:$PATH"
+            # Add ARTIQ executables to PATH  
+            export PATH="${pythonSet.artiq}/bin:$PATH"
             
             echo "ARTIQ Fork development environment with uv2nix"
             echo "Using Nix-managed virtual environment at: ${virtualenv}" 

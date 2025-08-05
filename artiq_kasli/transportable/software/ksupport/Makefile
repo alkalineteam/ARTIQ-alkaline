@@ -1,0 +1,1 @@
+/nix/store/vlk4j99zzkr85in5r0h1qq36b9250j5n-python3.13-artiq-9.0+36d7a2b.beta/lib/python3.13/site-packages/artiq/firmware/ksupport/Makefile

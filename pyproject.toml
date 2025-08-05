@@ -1,18 +1,18 @@
 [build-system]
-requires = ["setuptools>=64", "setuptools-scm>=8"]
+requires = ["setuptools>=64", "setuptools-scm>=8", "versioneer[toml]==0.29"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "artiq-fork"
+name = "artiq"
 dynamic = ["version"]
-description = "ARTIQ Fork - Custom extensions and modifications"
-readme = "README.md"
+description = "Advanced Real-Time Infrastructure for Quantum physics"
+readme = "README.rst"
 license = {text = "LGPL-3.0-or-later"}
 authors = [
-    {name = "ARTIQ Fork Contributors"},
+    {name = "M-Labs"},
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
@@ -23,124 +23,91 @@ classifiers = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    # Core scientific computing
     "numpy",
     "scipy",
-    "pandas>=2.3.1",
-    # ARTIQ-related dependencies that might be useful
     "python-dateutil",
     "prettytable",
     "pyserial",
+    "python-Levenshtein",
     "h5py",
+    "pyqtgraph",
+    "pygit2",
     "tqdm",
     "lmdb",
     "jsonschema",
     "platformdirs",
+    "pandas>=2.3.1",
     "rich>=14.1.0",
-    "requests>=2.32.4",
-    # Development and utility packages
+    "matplotlib>=3.10.3",
+    # ARTIQ-specific packages
+    "migen",
     "colorama",
     "jinja2",
     "msgpack",
     "regex",
-    "plotly>=6.2.0",
+    "requests>=2.32.4",
     "scikit-learn>=1.7.1",
 ]
 
 [project.optional-dependencies]
 dev = [
+    "paramiko",
     "pytest",
     "pytest-asyncio",
-    "black",
-    "flake8",
-    "mypy",
-    "jupyter",
-    "ipython",
 ]
 
-analysis = [
-    "sympy",
-    "astropy",
-    "uncertainties",
-    "lmfit",
-]
+[project.scripts]
+artiq_browser = "artiq.frontend.artiq_browser:main"
+artiq_client = "artiq.frontend.artiq_client:main"
+artiq_compile = "artiq.frontend.artiq_compile:main"
+artiq_coremgmt = "artiq.frontend.artiq_coremgmt:main"
+artiq_ctlmgr = "artiq.frontend.artiq_ctlmgr:main"
+artiq_dashboard = "artiq.frontend.artiq_dashboard:main"
+artiq_ddb_template = "artiq.frontend.artiq_ddb_template:main"
+artiq_flash = "artiq.frontend.artiq_flash:main"
+artiq_influxdb = "artiq.frontend.artiq_influxdb:main"
+artiq_influxdb_schedule = "artiq.frontend.artiq_influxdb_schedule:main"
+artiq_master = "artiq.frontend.artiq_master:main"
+artiq_mkfs = "artiq.frontend.artiq_mkfs:main"
+artiq_netboot = "artiq.frontend.artiq_netboot:main"
+artiq_route = "artiq.frontend.artiq_route:main"
+artiq_rtiomon = "artiq.frontend.artiq_rtiomon:main"
+artiq_rtiomap = "artiq.frontend.artiq_rtiomap:main"
+artiq_run = "artiq.frontend.artiq_run:main"
+artiq_session = "artiq.frontend.artiq_session:main"
+aqctl_corelog = "artiq.frontend.aqctl_corelog:main"
+aqctl_coreanalyzer = "artiq.frontend.aqctl_coreanalyzer:main"
+aqctl_moninj_proxy = "artiq.frontend.aqctl_moninj_proxy:main"
 
-visualization = [
-    "plotly",
-    "bokeh",
-    "seaborn",
-    "pyqtgraph",  # This might conflict with ARTIQ's version
-]
+[project.gui-scripts]
+artiq_browser = "artiq.frontend.artiq_browser:main"
+artiq_dashboard = "artiq.frontend.artiq_dashboard:main"
+artiq_session = "artiq.frontend.artiq_session:main"
 
 [project.urls]
-Homepage = "https://github.com/your-org/artiq-fork"
-Repository = "https://github.com/your-org/artiq-fork"
-Issues = "https://github.com/your-org/artiq-fork/issues"
+Homepage = "https://m-labs.hk/artiq"
+Documentation = "https://m-labs.hk/artiq/manual"
+Repository = "https://github.com/m-labs/artiq"
+Issues = "https://github.com/m-labs/artiq/issues"
 
 [tool.setuptools]
 zip-safe = false
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["artiq_fork*"]
+include = ["artiq*"]
 
 [tool.setuptools.package-data]
-artiq_fork = [
-    "*.json",
-    "*.yaml",
-    "*.yml",
-    "config/*",
+artiq = [
+    "gui/logo*.svg",
+    "compiler/module.ld",
+    "afws.pem",
 ]
 
-# Black code formatting
-[tool.black]
-line-length = 88
-target-version = ['py313']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
-
-# pytest configuration
-[tool.pytest.ini_options]
-minversion = "7.0"
-addopts = "-ra -q --strict-markers"
-testpaths = [
-    "tests",
-]
-python_files = [
-    "test_*.py",
-    "*_test.py",
-]
-
-# MyPy type checking
-[tool.mypy]
-python_version = "3.13"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
-
-[dependency-groups]
-dev = [
-    "jupyter>=1.1.1",
-]
+[tool.versioneer]
+VCS = "git"
+style = "pep440"
+versionfile_source = "artiq/_version.py"
+versionfile_build = "artiq/_version.py"
+tag_prefix = ""
+parentdir_prefix = "artiq-"
