@@ -41,6 +41,109 @@
     system = "x86_64-linux";
     pkgs = nixpkgs.legacyPackages.${system};
 
+    # Create wrapper scripts for uv add/remove that update pyproject.toml and rebuild
+    uvAddWrapper = pkgs.writeShellScriptBin "uv-add" ''
+      if [ $# -eq 0 ]; then
+        echo "Usage: uv-add <package1> [package2] [...]"
+        exit 1
+      fi
+      
+      echo "Adding packages to pyproject.toml: $*"
+      
+      # Use Python with tomli_w to add the dependencies to pyproject.toml
+      ${python.withPackages (ps: [ps.tomli-w])}/bin/python3 -c "
+      import tomllib, tomli_w
+      import sys
+      
+      with open('pyproject.toml', 'rb') as f:
+          data = tomllib.load(f)
+      
+      if 'project' not in data:
+          data['project'] = {}
+      if 'dependencies' not in data['project']:
+          data['project']['dependencies'] = []
+      
+      packages_to_add = sys.argv[1:]
+      added_packages = []
+      
+      for package in packages_to_add:
+          if package not in data['project']['dependencies']:
+              data['project']['dependencies'].append(package)
+              added_packages.append(package)
+          else:
+              print(f'{package} already in dependencies')
+      
+      if added_packages:
+          print(f'Added packages: {', '.join(added_packages)}')
+      
+      with open('pyproject.toml', 'wb') as f:
+          tomli_w.dump(data, f)
+      " "$@"
+      
+      echo "Updating uv.lock..."
+      uv lock
+      
+      echo "Rebuilding environment..."
+      exec nix develop
+    '';
+
+    uvRemoveWrapper = pkgs.writeShellScriptBin "uv-remove" ''
+      if [ $# -eq 0 ]; then
+        echo "Usage: uv-remove <package1> [package2] [...]"
+        exit 1
+      fi
+      
+      echo "Removing packages from pyproject.toml: $*"
+      
+      # Use Python with tomli_w to remove the dependencies from pyproject.toml
+      ${python.withPackages (ps: [ps.tomli-w])}/bin/python3 -c "
+      import tomllib, tomli_w
+      import sys
+      
+      with open('pyproject.toml', 'rb') as f:
+          data = tomllib.load(f)
+      
+      packages_to_remove = sys.argv[1:]
+      removed_packages = []
+      
+      if 'project' in data and 'dependencies' in data['project']:
+          original_deps = data['project']['dependencies'][:]
+          
+          # Filter out all packages to remove in one pass
+          new_deps = []
+          for dep in original_deps:
+              should_remove = False
+              for package in packages_to_remove:
+                  if (dep == package or dep.startswith(package + '==') or dep.startswith(package + '>=') or dep.startswith(package + '~=') or dep.startswith(package + '!=')):
+                      should_remove = True
+                      if package not in removed_packages:
+                          removed_packages.append(package)
+                      break
+              
+              if not should_remove:
+                  new_deps.append(dep)
+          
+          data['project']['dependencies'] = new_deps
+          
+          # Check for packages that weren't found
+          for package in packages_to_remove:
+              if package not in removed_packages:
+                  print(f'{package} not found in dependencies')
+      
+      if removed_packages:
+          print(f'Removed packages: {', '.join(removed_packages)}')
+      
+      with open('pyproject.toml', 'wb') as f:
+          tomli_w.dump(data, f)
+      " "$@"
+      
+      echo "Updating uv.lock..."
+      uv lock
+      
+      echo "Rebuilding environment..."
+      exec nix develop
+    '';
+
     # Python version to use
     python = pkgs.python313;
 
@@ -100,45 +203,30 @@
     };
 
     devShells.${system} = {
-      # Default development shell - always provides minimal ARTIQ environment
-      default = pkgs.mkShell {
-        name = "artiq-fork-minimal-shell";
-        packages = [
-          (python.withPackages (_: [artiq.packages.${system}.artiq]))
-          pkgs.uv
-          pkgs.git
-        ] ++ (with artiq.packages.${system}; [
-          vivadoEnv
-          vivado  
-          openocd-bscanspi
-        ]);
-        
-        shellHook = ''
-          echo "Minimal ARTIQ environment"
-          echo "ARTIQ: $(artiq_master --version 2>/dev/null || echo 'available')"
-          echo "Ready for uv package management and basic ARTIQ functionality"
-          echo ""
-          echo "Available shells:"
-          echo "  nix develop .#minimal     - This minimal environment"  
-          echo "  nix develop .#full-stack  - Full uv2nix environment (requires uv.lock)"
-        '';
-      };
-
-      # Full-stack development shell with uv2nix integration
-      full-stack = if workspace != null then
+      # Main development shell with automatic uv.lock detection
+      default = if workspace != null then
         # When uv.lock exists, create uv2nix development environment
         let
-          # Use the workspace to create virtual environment with all dependencies from uv.lock
-          virtualenv = workspace.mkVirtualEnv {
-            environ = pythonSet;
-            name = "artiq-fork-dev-env";
+          # Create editable overlay for local development
+          editableOverlay = workspace.mkEditablePyprojectOverlay {
+            root = "$REPO_ROOT";
+            # Add any local packages here if needed
+            # members = [ "your-local-package" ];
           };
+
+          # Override with editable support
+          editablePythonSet = pythonSet.overrideScope editableOverlay;
+
+          # Create virtual environment with all dependencies
+          virtualenv = editablePythonSet.mkVirtualEnv "artiq-fork-dev-env" workspace.deps.all;
 
         in pkgs.mkShell {
           name = "artiq-fork-uv2nix-shell";
           packages = [
             virtualenv
             pkgs.uv
+            uvAddWrapper
+            uvRemoveWrapper
             # Include essential ARTIQ development tools
             pkgs.git
             pkgs.llvm_15
@@ -169,45 +257,49 @@
             export PATH="${virtualenv}/bin:$PATH"
             
             # Add ARTIQ packages to PYTHONPATH so they're available alongside uv2nix packages
-            export PYTHONPATH="${pythonSet.artiq}/${python.sitePackages}:$PYTHONPATH"
-            export PYTHONPATH="${pythonSet.migen}/${python.sitePackages}:$PYTHONPATH"
-            export PYTHONPATH="${pythonSet.misoc}/${python.sitePackages}:$PYTHONPATH"
-            export PYTHONPATH="${pythonSet.asyncserial}/${python.sitePackages}:$PYTHONPATH"
-            export PYTHONPATH="${pythonSet.microscope}/${python.sitePackages}:$PYTHONPATH"
-            export PYTHONPATH="${pythonSet.sipyco}/${python.sitePackages}:$PYTHONPATH"
+            export PYTHONPATH="${editablePythonSet.artiq}/${python.sitePackages}:$PYTHONPATH"
+            export PYTHONPATH="${editablePythonSet.migen}/${python.sitePackages}:$PYTHONPATH"
+            export PYTHONPATH="${editablePythonSet.misoc}/${python.sitePackages}:$PYTHONPATH"
+            export PYTHONPATH="${editablePythonSet.asyncserial}/${python.sitePackages}:$PYTHONPATH"
+            export PYTHONPATH="${editablePythonSet.microscope}/${python.sitePackages}:$PYTHONPATH"
+            export PYTHONPATH="${editablePythonSet.sipyco}/${python.sitePackages}:$PYTHONPATH"
             
-            # Add ARTIQ executables to PATH  
-            export PATH="${pythonSet.artiq}/bin:$PATH"
+            # Add ARTIQ executables to PATH
+            export PATH="${editablePythonSet.artiq}/bin:$PATH"
             
-            echo "ARTIQ Fork development environment with uv2nix"
+            echo "ARTIQ Fork development environment with uv2nix (uv.lock detected)"
             echo "Using Nix-managed virtual environment at: ${virtualenv}" 
             echo "Python: $(which python)"
             echo "ARTIQ: $(artiq_master --version 2>/dev/null || echo 'available')"
             echo ""
             echo "To add packages:"
-            echo "  1. Run 'uv add <package>' to update pyproject.toml and uv.lock"
-            echo "  2. Run 'nix develop' again to rebuild with new packages"
+            echo "  uv-add <package>    - Add package and rebuild"
+            echo "  uv-remove <package> - Remove package and rebuild"
           '';
         }
       else
-        # When no uv.lock exists, show warning and fall back to minimal shell
-        self.devShells.${system}.minimal.overrideAttrs (old: {
-          name = "artiq-fork-full-stack-fallback";
+        # When no uv.lock exists, provide minimal shell
+        pkgs.mkShell {
+          name = "artiq-fork-minimal-shell";
+          packages = [
+            (python.withPackages (_: [artiq.packages.${system}.artiq]))
+            pkgs.uv
+            pkgs.git
+          ] ++ (with artiq.packages.${system}; [
+            vivadoEnv
+            vivado  
+            openocd-bscanspi
+          ]);
+          
           shellHook = ''
-            echo "WARNING: No uv.lock file detected!"
-            echo "Cannot create full-stack environment without uv.lock file."
+            echo "ARTIQ Fork minimal environment (no uv.lock detected)"
+            echo "ARTIQ: $(artiq_master --version 2>/dev/null || echo 'available')"
             echo ""
-            echo "To create uv.lock file:"
+            echo "To enable full-stack environment:"
             echo "  1. Run 'uv lock' to generate uv.lock from pyproject.toml"
-            echo "  2. Run 'nix develop .#full-stack' again"
-            echo ""
-            echo "Falling back to minimal environment..."
-            echo ""
-          '' + old.shellHook;
-        });
-
-      # Alias for the minimal shell for backward compatibility and explicit access
-      minimal = self.devShells.${system}.default;
+            echo "  2. Run 'nix develop' again for uv2nix integration with uv-add/uv-remove"
+          '';
+        };
     };
 
     # Expose useful utilities for downstream consumers
