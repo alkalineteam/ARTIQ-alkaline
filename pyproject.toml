@@ -2,7 +2,7 @@
 requires = [
     "setuptools>=64",
     "setuptools-scm>=8",
-    "versioneer[toml]==0.29",
+    "versioneer[toml]",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -13,10 +13,18 @@ dynamic = [
 ]
 description = "ARTIQ Fork - Custom extensions and modifications"
 readme = "README.md"
+name = "artiq-fork"
+dynamic = [
+    "version",
+]
+description = "ARTIQ Fork - Custom extensions and modifications"
+readme = "README.md"
 authors = [
+    { name = "ARTIQ Fork Contributors" },
     { name = "ARTIQ Fork Contributors" },
 ]
 classifiers = [
+    "Development Status :: 4 - Beta",
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Science/Research",
@@ -52,12 +60,18 @@ dependencies = [
     "uncertainties",
     "lmfit",
     "pyqtgraph",
+    "pandas>=2.3.1",
+    "seaborn",
+    "scikit-learn",
 ]
 
 [project.license]
 text = "LGPL-3.0-or-later"
 
 [project.urls]
+Research-Website = "https://www.strontium-birmingham.org/"
+Repository = "https://github.com/alkalineteam/ARTIQ-alkaline"
+Fork = "https://github.com/alkalineteam/ARTIQ-alkaline-fork"
 Research-Website = "https://www.strontium-birmingham.org/"
 Repository = "https://github.com/alkalineteam/ARTIQ-alkaline"
 Fork = "https://github.com/alkalineteam/ARTIQ-alkaline-fork"
@@ -70,8 +84,16 @@ include-package-data = true
 include = [
     "artiq_fork*",
 ]
+include = [
+    "artiq_fork*",
+]
 
 [tool.setuptools.package-data]
+artiq_fork = [
+    "*.json",
+    "*.yaml",
+    "*.yml",
+    "config/*",
 artiq_fork = [
     "*.json",
     "*.yaml",
@@ -117,3 +139,8 @@ strict_equality = true
 dev = [
     "jupyter>=1.1.1",
 ]
+
+[tool.uv]
+index-url = "https://download.pytorch.org/whl/cpu"
+extra-index-url = ["https://pypi.org/simple"]
+

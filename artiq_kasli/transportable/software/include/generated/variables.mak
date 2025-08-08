@@ -1,12 +1,12 @@
-ifeq ($(CPU),vexriscv-g)
-TRIPLE=riscv32-unknown-linux
-CPUFLAGS=-D__vexriscv__ -march=rv32g -mabi=ilp32d
-CLANG=1
-LLVM_TOOLS=1
-endif
 ifeq ($(CPU),vexriscv)
 TRIPLE=riscv32-unknown-linux
 CPUFLAGS=-D__vexriscv__ -march=rv32ima -mabi=ilp32
+CLANG=1
+LLVM_TOOLS=1
+endif
+ifeq ($(CPU),vexriscv-g)
+TRIPLE=riscv32-unknown-linux
+CPUFLAGS=-D__vexriscv__ -march=rv32g -mabi=ilp32d
 CLANG=1
 LLVM_TOOLS=1
 endif
