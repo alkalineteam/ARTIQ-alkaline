@@ -4,7 +4,9 @@ result-*
 
 # Ignore automatically generated direnv output
 .direnv
-
 __pycache__/
 *.egg-info
 .pydeps
+*.pyon
+.mdb
+.mdb-lock
