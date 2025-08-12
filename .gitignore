@@ -5,6 +5,7 @@ result-*
 # Ignore automatically generated direnv output
 .direnv
 __pycache__/
+artiq_kasli
 *.egg-info
 .pydeps
 *.pyon
