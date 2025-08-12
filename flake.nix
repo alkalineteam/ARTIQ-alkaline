@@ -237,7 +237,7 @@
           ] ++ (with artiq.packages.${system}; [
             vivado
             openocd-bscanspi
-          ]);
+          ]) ++ artiq.devShells.${system}.default.nativeBuildInputs;
 
           env = {
             # Use the uv2nix virtual environment (in /nix/store)
@@ -313,7 +313,7 @@
             vivadoEnv
             vivado  
             openocd-bscanspi
-          ]);
+          ]) ++ artiq.devShells.${system}.default.nativeBuildInputs;
           
           shellHook = ''
             # Ensure libstdc++ is available for binary wheels (PyTorch, etc.)
