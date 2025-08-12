@@ -9,5 +9,5 @@ artiq_kasli
 *.egg-info
 .pydeps
 *.pyon
-.mdb
-.mdb-lock
+*.mdb
+*.mdb-lock
