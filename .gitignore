@@ -11,3 +11,4 @@ artiq_kasli
 *.pyon
 *.mdb
 *.mdb-lock
+flash
