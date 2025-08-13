@@ -27,7 +27,8 @@
         },
         {
             "type": "sampler",
-            "ports": [2, 3]
+            "ports": [2, 3],
+            "hw_rev": "v2.2"
         },
         {
             "type": "urukul",
