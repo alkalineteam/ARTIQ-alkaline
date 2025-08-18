@@ -60,6 +60,7 @@ dependencies = [
     "seaborn",
     "pyqtgraph",
     "scikit-learn",
+    "torch",
 ]
 
 [project.license]
@@ -120,12 +121,6 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 strict_equality = true
-
-[tool.uv]
-index-url = "https://download.pytorch.org/whl/cpu"
-extra-index-url = [
-    "https://pypi.org/simple",
-]
 
 [dependency-groups]
 dev = [
