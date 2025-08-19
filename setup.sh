@@ -24,7 +24,7 @@ mkdir -p ~/.config/nixpkgs
 
 # Add experimental features + sandbox paths
 NIX_CONF1=~/.config/nix/nix.conf
-NIX_CONF2=~/.config/nixpkgs/nixpkgs.conf
+NIX_CONF2=~/.config/nixpkgs/config.nix
 echo "⚙️  Configuring $NIX_CONF1 & $NIX_CONF2"
 
 # Add only if not already present
@@ -34,7 +34,7 @@ echo "experimental-features = nix-command flakes" >> "$NIX_CONF1"
 grep -qxF "extra-sandbox-paths = /opt" "$NIX_CONF1" 2>/dev/null || \
 echo "extra-sandbox-paths = /opt" >> "$NIX_CONF1"
 
-grep -qxF "allowUnfree = true" "$NIX_CONF2" 2>/dev/null || \
-echo "allowUnfree = true" >> "$NIX_CONF2"
+grep -qxF "{ allowUnfree = true; }" "$NIX_CONF2" 2>/dev/null || \
+echo "{ allowUnfree = true; }" >> "$NIX_CONF2"
 
 echo "✅ Setup complete. You will need to restart your shell for everything to work."
