@@ -1,5 +1,5 @@
 import torch
-# import torchvision
+import torchvision
 # import torchaudio
 import pandas as pd
 import seaborn

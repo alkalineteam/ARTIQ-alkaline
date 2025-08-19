@@ -99,7 +99,7 @@
       uv lock
       
       echo "Rebuilding environment..."
-      exec nix develop
+      exec nix develop --impure
     '';
 
     # CUDA-enabled Python wrapper using nixGL (optional, not used by default)
@@ -215,7 +215,7 @@
       uv lock
       
       echo "Rebuilding environment..."
-      exec nix develop
+      exec nix develop --impure
     '';
 
     # Load uv workspace if uv.lock exists

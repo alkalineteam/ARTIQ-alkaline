@@ -59,8 +59,9 @@ dependencies = [
     "bokeh",
     "seaborn",
     "pyqtgraph",
-    "scikit-learn",
     "torch",
+    "torchvision",
+    "scikit-learn",
 ]
 
 [project.license]
