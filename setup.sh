@@ -20,6 +20,7 @@ fi
 
 # Ensure config directory exists
 mkdir -p ~/.config/nix
+mkdir -p ~/.config/nixpkgs
 
 # Add experimental features + sandbox paths
 NIX_CONF1=~/.config/nix/nix.conf
