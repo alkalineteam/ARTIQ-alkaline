@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    # Main ARTIQ repository as a dependency
+    # ARTIQ repository as a dependency
     artiq = {
       url = "github:alkalineteam/ARTIQ-alkaline-fork/master";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -29,6 +29,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # nixGL for GPU support
     nixgl = {
       url = "github:nix-community/nixGL";
       inputs.nixpkgs.follows = "nixpkgs";

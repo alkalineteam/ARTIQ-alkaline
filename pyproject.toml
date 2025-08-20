@@ -79,7 +79,7 @@ index-strategy = "unsafe-best-match"
 name = "pytorch-cuda"
 url = "https://download.pytorch.org/whl/cu129"
 
-[tools.uv.sources]
+[tool.uv.sources]
 torch = { index = "pytorch-cuda" }
 
 [tool.setuptools]
