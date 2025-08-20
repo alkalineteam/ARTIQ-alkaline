@@ -253,20 +253,6 @@
           "libcuda.so.1"
           "libcusolver.so.11"
           "libcupti.so.12"
-          # FFmpeg libraries
-          "libavutil.so.56"
-          "libavutil.so.58" 
-          "libavcodec.so.58"
-          "libavcodec.so.60"
-          "libavformat.so.58"
-          "libavformat.so.59"
-          "libavformat.so.60"
-          "libavdevice.so.58"
-          "libavdevice.so.59"
-          "libavdevice.so.60"
-          "libavfilter.so.7"
-          "libavfilter.so.8"
-          "libavfilter.so.9"
           # PyTorch internal libraries
           "libtorch_python.so"
           "libtorch.so"
@@ -274,6 +260,20 @@
           "libtorch_cuda.so"
           "libc10.so"
           "libc10_cuda.so"
+          # # FFmpeg libraries
+          # "libavutil.so.56"
+          # "libavutil.so.58" 
+          # "libavcodec.so.58"
+          # "libavcodec.so.60"
+          # "libavformat.so.58"
+          # "libavformat.so.59"
+          # "libavformat.so.60"
+          # "libavdevice.so.58"
+          # "libavdevice.so.59"
+          # "libavdevice.so.60"
+          # "libavfilter.so.7"
+          # "libavfilter.so.8"
+          # "libavfilter.so.9"
         ];
         
         # Helper function to override CUDA packages

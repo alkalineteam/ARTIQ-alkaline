@@ -59,9 +59,9 @@ dependencies = [
     "bokeh",
     "seaborn",
     "pyqtgraph",
+    "scikit-learn",
     "torch",
     "torchvision",
-    "scikit-learn",
 ]
 
 [project.license]
@@ -71,6 +71,16 @@ text = "LGPL-3.0-or-later"
 Research-Website = "https://www.strontium-birmingham.org/"
 Repository = "https://github.com/alkalineteam/ARTIQ-alkaline"
 Fork = "https://github.com/alkalineteam/ARTIQ-alkaline-fork"
+
+[tool.uv]
+index-strategy = "unsafe-best-match"
+
+[[tool.uv.index]]
+name = "pytorch-cuda"
+url = "https://download.pytorch.org/whl/cu129"
+
+[tools.uv.sources]
+torch = { index = "pytorch-cuda" }
 
 [tool.setuptools]
 zip-safe = false
