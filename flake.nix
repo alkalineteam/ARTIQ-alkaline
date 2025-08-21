@@ -392,10 +392,7 @@
           ]);
 
           env = {
-            # Use the uv2nix virtual environment (in /nix/store)
-            VIRTUAL_ENV = "${virtualenv}";
             UV_NO_SYNC = "1";
-            UV_PYTHON = "${virtualenv}/bin/python";
             UV_PYTHON_DOWNLOADS = "never";
             # Inherit ARTIQ-specific environment variables
             QT_PLUGIN_PATH = artiq.qtPaths.QT_PLUGIN_PATH or "";
@@ -408,6 +405,8 @@
             
             # Activate the uv2nix virtual environment (managed by Nix)
             export PATH="${virtualenv}/bin:$PATH"
+            export VIRTUAL_ENV="${virtualenv}"
+            export UV_PYTHON="${virtualenv}/bin/python"
             
             
             # Add ARTIQ packages to PYTHONPATH so they're available alongside uv2nix packages
