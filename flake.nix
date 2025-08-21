@@ -29,7 +29,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # nixGL for GPU support
+    # nixGL for GPU support - conditionally included
     nixgl = {
       url = "github:nix-community/nixGL";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -51,8 +51,14 @@
       config.allowUnfree = true;
     };
     
-    # nixGL packages
-    nixgl-pkgs = nixgl.packages.${system};
+    # Check if NVIDIA GPU is available by looking for NVIDIA devices or driver modules
+    # Use only path-based checks to avoid file read errors
+    hasNvidiaGpu = builtins.pathExists "/dev/nvidia0" ||
+                    builtins.pathExists "/proc/driver/nvidia" ||
+                    builtins.pathExists "/sys/module/nvidia";
+    
+    # nixGL packages - only load if NVIDIA GPU is detected to avoid null driver version errors
+    nixgl-pkgs = if hasNvidiaGpu then nixgl.packages.${system} else {};
 
     # Python version to use
     python = pkgs.python313;
@@ -220,24 +226,24 @@
     '';
 
     # Load uv workspace if uv.lock exists
-    workspace = if builtins.pathExists ./uv.lock 
+    workspace = if builtins.pathExists ./uv.lock
       then uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; }
       else null;
 
     # Create overlay from workspace if it exists
-    uv2nixOverlay = if workspace != null 
+    uv2nixOverlay = if workspace != null
       then workspace.mkPyprojectOverlay {
         sourcePreference = "wheel";
       }
       else (_: _: {});
 
     # Overlay to fix NVIDIA CUDA library dependencies
-    cudaFixOverlay = final: prev: 
+    cudaFixOverlay = final: prev:
       let
         # Common CUDA libraries that might be missing
         commonCudaDeps = [
           "libmlx5.so.1"
-          "librdmacm.so.1" 
+          "librdmacm.so.1"
           "libibverbs.so.1"
           "libnvJitLink.so.12"
           "libcusparse.so.12"
@@ -263,7 +269,7 @@
           "libc10_cuda.so"
           # # FFmpeg libraries
           # "libavutil.so.56"
-          # "libavutil.so.58" 
+          # "libavutil.so.58"
           # "libavcodec.so.58"
           # "libavcodec.so.60"
           # "libavformat.so.58"
@@ -278,7 +284,7 @@
         ];
         
         # Helper function to override CUDA packages
-        fixCudaPackage = name: pkg: 
+        fixCudaPackage = name: pkg:
           if pkg != null then
             pkg.overrideAttrs (old: {
               autoPatchelfIgnoreMissingDeps = (old.autoPatchelfIgnoreMissingDeps or []) ++ commonCudaDeps;
@@ -330,16 +336,16 @@
       python.pkgs;
 
     # Helper to create virtual environments with uv2nix
-    mkVirtualEnv = name: deps: 
-      if workspace != null 
+    mkVirtualEnv = name: deps:
+      if workspace != null
       then pythonSet.mkVirtualEnv name deps
       else python.withPackages (_: [artiq.packages.${system}.artiq]);
 
   in {
     packages.${system} = {
       # Default package - virtual environment with all dependencies
-      default = 
-        if workspace != null 
+      default =
+        if workspace != null
         then mkVirtualEnv "artiq-fork-env" workspace.deps.default
         else python.withPackages (_: [artiq.packages.${system}.artiq]);
 
@@ -370,7 +376,7 @@
 
         in pkgs.mkShell {
           name = "artiq-fork-uv2nix-shell";
-          packages = [
+          packages = builtins.filter (x: x != null) [
             virtualenv
             pkgs.uv
             uvAddWrapper
@@ -383,8 +389,8 @@
             pkgs.stdenv.cc.cc.lib
             # RDMA/InfiniBand libraries for CUDA packages
             pkgs.rdma-core
-            # nixGL for NVIDIA driver access - now enabled with proper approach
-            nixgl-pkgs.nixGLNvidia
+            # nixGL for NVIDIA driver access - conditionally enabled
+            (nixgl-pkgs.nixGLNvidia or null)
             # Add any additional tools you need
           ] ++ (with artiq.packages.${system}; [
             vivado
@@ -392,7 +398,10 @@
           ]);
 
           env = {
+            # Use the uv2nix virtual environment (in /nix/store)
+            VIRTUAL_ENV = "${virtualenv}";
             UV_NO_SYNC = "1";
+            UV_PYTHON = "${virtualenv}/bin/python";
             UV_PYTHON_DOWNLOADS = "never";
             # Inherit ARTIQ-specific environment variables
             QT_PLUGIN_PATH = artiq.qtPaths.QT_PLUGIN_PATH or "";
@@ -405,8 +414,6 @@
             
             # Activate the uv2nix virtual environment (managed by Nix)
             export PATH="${virtualenv}/bin:$PATH"
-            export VIRTUAL_ENV="${virtualenv}"
-            export UV_PYTHON="${virtualenv}/bin/python"
             
             
             # Add ARTIQ packages to PYTHONPATH so they're available alongside uv2nix packages
@@ -426,36 +433,43 @@
             export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$LD_LIBRARY_PATH
             
             # Auto-detect NVIDIA GPU and set up nixGL aliases
-            if command -v lspci >/dev/null 2>&1 && lspci | grep -i nvidia > /dev/null 2>&1; then
-              # NVIDIA GPU detected
-              NIXGL_BIN=$(find ${nixgl-pkgs.nixGLNvidia}/bin -name "nixGLNvidia-*" 2>/dev/null | head -n1)
-              GPU_TYPE="NVIDIA"
-              
-              if [ -n "$NIXGL_BIN" ]; then
-                alias python="$NIXGL_BIN python"
-                alias python3="$NIXGL_BIN python3"
-                alias jupyter="$NIXGL_BIN jupyter"
-                alias ipython="$NIXGL_BIN ipython"
-                export NIXGL_BIN="$NIXGL_BIN"
+            ${if nixgl-pkgs ? nixGLNvidia then ''
+              if command -v lspci >/dev/null 2>&1 && lspci | grep -i nvidia > /dev/null 2>&1; then
+                # NVIDIA GPU detected
+                NIXGL_BIN=$(find ${nixgl-pkgs.nixGLNvidia}/bin -name "nixGLNvidia-*" 2>/dev/null | head -n1)
+                GPU_TYPE="NVIDIA"
+                
+                if [ -n "$NIXGL_BIN" ]; then
+                  alias python="$NIXGL_BIN python"
+                  alias python3="$NIXGL_BIN python3"
+                  alias jupyter="$NIXGL_BIN jupyter"
+                  alias ipython="$NIXGL_BIN ipython"
+                  export NIXGL_BIN="$NIXGL_BIN"
+                fi
+              else
+                # No NVIDIA GPU or lspci not available - use CPU-only mode
+                NIXGL_BIN=""
+                GPU_TYPE="CPU-only"
               fi
-            else
-              # No NVIDIA GPU or lspci not available - use CPU-only mode
+            '' else ''
+              # nixGL not available - use CPU-only mode
               NIXGL_BIN=""
-              GPU_TYPE="CPU-only"
-            fi
+              GPU_TYPE="CPU-only (nixGL unavailable)"
+            ''}
             
             # Add ARTIQ executables to PATH
             export PATH="${editablePythonSet.artiq}/bin:$PATH"
             
             echo "ARTIQ Fork development environment with uv2nix (uv.lock detected)"
-            echo "Using Nix-managed virtual environment at: ${virtualenv}" 
+            echo "Using Nix-managed virtual environment at: ${virtualenv}"
             echo "Python: $(which python)"
             echo "ARTIQ: $(artiq_master --version 2>/dev/null || echo 'available')"
             echo "✅ PyTorch dev shell with nixGL ($GPU_TYPE) is ready!"
             if [ -n "$NIXGL_BIN" ]; then
               echo "💡 python3 and jupyter use GPU acceleration automatically"
             else
-              echo "💡 Running in CPU-only mode (no NVIDIA GPU detected)"
+              echo "💡 Running in CPU-only mode"
+              ${if !hasNvidiaGpu then ''echo "   (no NVIDIA GPU detected at build time)"'' else ""}
             fi
             echo ""
             echo "To add packages:"
@@ -467,15 +481,15 @@
         # When no uv.lock exists, provide minimal shell
         pkgs.mkShell {
           name = "artiq-fork-minimal-shell";
-          packages = [
+          packages = builtins.filter (x: x != null) [
             (python.withPackages (_: [artiq.packages.${system}.artiq]))
             pkgs.uv
             pkgs.git
             pkgs.stdenv.cc.cc.lib
             # RDMA/InfiniBand libraries for CUDA packages
             pkgs.rdma-core
-            # nixGL for NVIDIA driver access - now enabled with proper approach
-            nixgl-pkgs.nixGLNvidia
+            # nixGL for NVIDIA driver access - conditionally enabled
+            (nixgl-pkgs.nixGLNvidia or null)
           ] ++ (with artiq.packages.${system}; [
             vivadoEnv
             vivado  
@@ -493,30 +507,37 @@
             export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$LD_LIBRARY_PATH
             
             # Auto-detect NVIDIA GPU and set up nixGL aliases
-            if command -v lspci >/dev/null 2>&1 && lspci | grep -i nvidia > /dev/null 2>&1; then
-              # NVIDIA GPU detected
-              NIXGL_BIN=$(find ${nixgl-pkgs.nixGLNvidia}/bin -name "nixGLNvidia-*" 2>/dev/null | head -n1)
-              GPU_TYPE="NVIDIA"
-              
-              if [ -n "$NIXGL_BIN" ]; then
-                alias python="$NIXGL_BIN python"
-                alias python3="$NIXGL_BIN python3"
-                alias jupyter="$NIXGL_BIN jupyter"
-                alias ipython="$NIXGL_BIN ipython"
-                export NIXGL_BIN="$NIXGL_BIN"
+            ${if nixgl-pkgs ? nixGLNvidia then ''
+              if command -v lspci >/dev/null 2>&1 && lspci | grep -i nvidia > /dev/null 2>&1; then
+                # NVIDIA GPU detected
+                NIXGL_BIN=$(find ${nixgl-pkgs.nixGLNvidia}/bin -name "nixGLNvidia-*" 2>/dev/null | head -n1)
+                GPU_TYPE="NVIDIA"
+                
+                if [ -n "$NIXGL_BIN" ]; then
+                  alias python="$NIXGL_BIN python"
+                  alias python3="$NIXGL_BIN python3"
+                  alias jupyter="$NIXGL_BIN jupyter"
+                  alias ipython="$NIXGL_BIN ipython"
+                  export NIXGL_BIN="$NIXGL_BIN"
+                fi
+              else
+                # No NVIDIA GPU or lspci not available - use CPU-only mode
+                NIXGL_BIN=""
+                GPU_TYPE="CPU-only"
               fi
-            else
-              # No NVIDIA GPU or lspci not available - use CPU-only mode
+            '' else ''
+              # nixGL not available - use CPU-only mode
               NIXGL_BIN=""
-              GPU_TYPE="CPU-only"
-            fi
+              GPU_TYPE="CPU-only (nixGL unavailable)"
+            ''}
             
             echo "ARTIQ Fork minimal environment (no uv.lock detected)"
             echo "✅ PyTorch dev shell with nixGL ($GPU_TYPE) is ready!"
             if [ -n "$NIXGL_BIN" ]; then
               echo "💡 python3 and jupyter use GPU acceleration automatically"
             else
-              echo "💡 Running in CPU-only mode (no NVIDIA GPU detected)"
+              echo "💡 Running in CPU-only mode"
+              ${if !hasNvidiaGpu then ''echo "   (no NVIDIA GPU detected at build time)"'' else ""}
             fi
             echo "ARTIQ: $(artiq_master --version 2>/dev/null || echo 'available')"
             echo ""
