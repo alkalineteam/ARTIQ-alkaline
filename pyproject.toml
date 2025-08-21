@@ -57,11 +57,11 @@ dependencies = [
     "uncertainties",
     "lmfit",
     "bokeh",
-    "seaborn",
     "pyqtgraph",
-    "scikit-learn",
     "torch",
     "torchvision",
+    "seaborn",
+    "scikit-learn",
 ]
 
 [project.license]
@@ -74,13 +74,12 @@ Fork = "https://github.com/alkalineteam/ARTIQ-alkaline-fork"
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
+index = [
+    { name = "pytorch-cuda", url = "https://download.pytorch.org/whl/cu129" },
+]
 
-[[tool.uv.index]]
-name = "pytorch-cuda"
-url = "https://download.pytorch.org/whl/cu129"
-
-[tool.uv.sources]
-torch = { index = "pytorch-cuda" }
+[tool.uv.sources.torch]
+index = "pytorch-cuda"
 
 [tool.setuptools]
 zip-safe = false
