@@ -1,16 +1,16 @@
 {
-  description = "ARTIQ Fork with uv2nix support - using main ARTIQ repository as dependency";
+  description = "ARTIQ Fork for alkaline team @ University of Birmingham";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    # ARTIQ repository as a dependency
+    # ARTIQ
     artiq = {
       url = "github:alkalineteam/ARTIQ-alkaline-fork/master";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # uv2nix inputs for modern Python dependency management
+    # uv2nix inputs for Python dependency management
     pyproject-nix = {
       url = "github:pyproject-nix/pyproject.nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -29,7 +29,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # nixGL for GPU support - conditionally included
+    # nixGL for GPU support
     nixgl = {
       url = "github:nix-community/nixGL";
       inputs.nixpkgs.follows = "nixpkgs";
