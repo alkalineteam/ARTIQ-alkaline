@@ -10,6 +10,19 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "allentools"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "itsdangerous" },
+    { name = "rsa" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a5/ba/1bf5d09c82fd3c86f51f3c0c9f2ff56e0c8f6e3afba910f8aba7f8c8d5eb/AllenTools-0.1.1.tar.gz", hash = "sha256:5afe181c0e9cbfce3d8d492b80103f3305d22fb5354dc8338990bd382a4ba8e2", size = 4330, upload-time = "2019-05-02T14:47:27.206Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4e/dd/8d061d9848ede4056d26dfabeb0613804f29d877300c9a7085d15f108af1/AllenTools-0.1.1-py3-none-any.whl", hash = "sha256:14bef0f228555eb9a502bbc66d6a81ee4132cef523c7f9294fdf685e30709282", size = 5785, upload-time = "2019-05-02T14:47:17.248Z" },
+]
+
+[[package]]
 name = "anyio"
 version = "4.10.0"
 source = { registry = "https://pypi.org/simple" }
@@ -122,6 +135,7 @@ wheels = [
 name = "artiq-fork"
 source = { editable = "." }
 dependencies = [
+    { name = "allentools" },
     { name = "astropy" },
     { name = "black" },
     { name = "bokeh" },
@@ -166,6 +180,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "allentools" },
     { name = "astropy" },
     { name = "black" },
     { name = "bokeh" },
@@ -793,6 +808,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/7c/1a/3c8edc664e06e6bd06cce40c6b22da5f1429aa4224d0c590f3be21c91ead/isoduration-20.11.0.tar.gz", hash = "sha256:ac2f9015137935279eac671f94f89eb00584f940f5dc49462a0c4ee692ba1bd9", size = 11649, upload-time = "2020-11-01T11:00:00.312Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7b/55/e5326141505c5d5e34c5e0935d2908a74e4561eca44108fbfb9c13d2911a/isoduration-20.11.0-py3-none-any.whl", hash = "sha256:b2904c2a4228c3d44f409c8ae8e2370eb21a26f7ac2ec5446df141dde3452042", size = 11321, upload-time = "2020-11-01T10:59:58.02Z" },
+]
+
+[[package]]
+name = "itsdangerous"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/68/1a/f27de07a8a304ad5fa817bbe383d1238ac4396da447fa11ed937039fa04b/itsdangerous-1.1.0.tar.gz", hash = "sha256:321b033d07f2a4136d3ec762eac9f16a10ccd60f53c0c91af90217ace7ba1f19", size = 53219, upload-time = "2018-10-27T00:17:37.922Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/76/ae/44b03b253d6fade317f32c24d100b3b35c2239807046a4c953c7b89fa49e/itsdangerous-1.1.0-py2.py3-none-any.whl", hash = "sha256:b12271b2047cb23eeb98c8b5622e2e5c5e9abd9784a153e9d8ef9cb4dd09d749", size = 16743, upload-time = "2018-10-27T00:17:35.954Z" },
 ]
 
 [[package]]
@@ -1877,6 +1901,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pyasn1"
+version = "0.6.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ba/e9/01f1a64245b89f039897cb0130016d79f77d52669aae6ee7b159a6c4c018/pyasn1-0.6.1.tar.gz", hash = "sha256:6f580d2bdd84365380830acf45550f2511469f673cb4a5ae3857a3170128b034", size = 145322, upload-time = "2024-09-10T22:41:42.55Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c8/f1/d6a797abb14f6283c0ddff96bbdd46937f64122b8c925cab503dd37f8214/pyasn1-0.6.1-py3-none-any.whl", hash = "sha256:0d632f46f2ba09143da3a8afe9e33fb6f92fa2320ab7e886e2d0f7672af84629", size = 83135, upload-time = "2024-09-11T16:00:36.122Z" },
+]
+
+[[package]]
 name = "pycodestyle"
 version = "2.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2275,6 +2308,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/63/09/ee1bb5536f99f42c839b177d552f6114aa3142d82f49cef49261ed28dbe0/rpds_py-0.27.0-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:3001013dae10f806380ba739d40dee11db1ecb91684febb8406a87c2ded23dae", size = 555090, upload-time = "2025-08-07T08:25:20.461Z" },
     { url = "https://files.pythonhosted.org/packages/7d/2c/363eada9e89f7059199d3724135a86c47082cbf72790d6ba2f336d146ddb/rpds_py-0.27.0-cp314-cp314t-win32.whl", hash = "sha256:0f401c369186a5743694dd9fc08cba66cf70908757552e1f714bfc5219c655b5", size = 218001, upload-time = "2025-08-07T08:25:21.761Z" },
     { url = "https://files.pythonhosted.org/packages/e2/3f/d6c216ed5199c9ef79e2a33955601f454ed1e7420a93b89670133bca5ace/rpds_py-0.27.0-cp314-cp314t-win_amd64.whl", hash = "sha256:8a1dca5507fa1337f75dcd5070218b20bc68cf8844271c923c1b79dfcbc20391", size = 230993, upload-time = "2025-08-07T08:25:23.34Z" },
+]
+
+[[package]]
+name = "rsa"
+version = "4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyasn1" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cb/d0/8f99b91432a60ca4b1cd478fd0bdf28c1901c58e3a9f14f4ba3dba86b57f/rsa-4.0.tar.gz", hash = "sha256:1a836406405730121ae9823e19c6e806c62bbad73f890574fff50efa4122c487", size = 37385, upload-time = "2018-09-16T11:43:46.48Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/02/e5/38518af393f7c214357079ce67a317307936896e961e35450b70fad2a9cf/rsa-4.0-py2.py3-none-any.whl", hash = "sha256:14ba45700ff1ec9eeb206a2ce76b32814958a98e372006c8fb76ba820211be66", size = 38251, upload-time = "2018-09-16T11:43:44.684Z" },
 ]
 
 [[package]]
