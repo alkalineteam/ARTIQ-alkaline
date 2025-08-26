@@ -357,7 +357,7 @@
     };
 
     devShells.${system} = {
-      # Main development shell with automatic uv.lock detection
+      # Main development shell - requires uv.lock to exist
       default = if workspace != null then
         # When uv.lock exists, create uv2nix development environment
         let
@@ -478,78 +478,8 @@
           '';
         }
       else
-        # When no uv.lock exists, provide minimal shell
-        pkgs.mkShell {
-          name = "artiq-fork-minimal-shell";
-          packages = builtins.filter (x: x != null) [
-            (python.withPackages (_: [artiq.packages.${system}.artiq]))
-            pkgs.uv
-            pkgs.git
-            pkgs.stdenv.cc.cc.lib
-            # RDMA/InfiniBand libraries for CUDA packages
-            pkgs.rdma-core
-            # nixGL for NVIDIA driver access - conditionally enabled
-            (nixgl-pkgs.nixGLNvidia or null)
-          ] ++ (with artiq.packages.${system}; [
-            vivadoEnv
-            vivado  
-            openocd-bscanspi
-          ]);
-          
-          shellHook = ''
-            # Ensure libstdc++ is available for binary wheels (PyTorch, etc.)
-            export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:$LD_LIBRARY_PATH"
-            export REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
-            
-            # CUDA environment setup
-            export CUDA_PATH=/usr/local/cuda
-            export PATH=$CUDA_PATH/bin:$PATH
-            export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$LD_LIBRARY_PATH
-            
-            # Auto-detect NVIDIA GPU and set up nixGL aliases
-            ${if nixgl-pkgs ? nixGLNvidia then ''
-              if command -v lspci >/dev/null 2>&1 && lspci | grep -i nvidia > /dev/null 2>&1; then
-                # NVIDIA GPU detected
-                NIXGL_BIN=$(find ${nixgl-pkgs.nixGLNvidia}/bin -name "nixGLNvidia-*" 2>/dev/null | head -n1)
-                GPU_TYPE="NVIDIA"
-                
-                if [ -n "$NIXGL_BIN" ]; then
-                  alias python="$NIXGL_BIN python"
-                  alias python3="$NIXGL_BIN python3"
-                  alias jupyter="$NIXGL_BIN jupyter"
-                  alias ipython="$NIXGL_BIN ipython"
-                  export NIXGL_BIN="$NIXGL_BIN"
-                fi
-              else
-                # No NVIDIA GPU or lspci not available - use CPU-only mode
-                NIXGL_BIN=""
-                GPU_TYPE="CPU-only"
-              fi
-            '' else ''
-              # nixGL not available - use CPU-only mode
-              NIXGL_BIN=""
-              GPU_TYPE="CPU-only (nixGL unavailable)"
-            ''}
-            
-            echo "ARTIQ Fork minimal environment (no uv.lock detected)"
-            echo "✅ PyTorch dev shell with nixGL ($GPU_TYPE) is ready!"
-            if [ -n "$NIXGL_BIN" ]; then
-              echo "💡 python3 and jupyter use GPU acceleration automatically"
-            else
-              echo "💡 Running in CPU-only mode"
-              ${if !hasNvidiaGpu then ''echo "   (no NVIDIA GPU detected at build time)"'' else ""}
-            fi
-            echo "ARTIQ: $(artiq_master --version 2>/dev/null || echo 'available')"
-            echo ""
-            echo "For CUDA/GPU applications:"
-            echo "  python-cuda script.py - Run Python with GPU access"
-            echo "  cuda-run <command>    - Run any command with GPU access"
-            echo ""
-            echo "To enable full-stack environment:"
-            echo "  1. Run 'uv lock' to generate uv.lock from pyproject.toml"
-            echo "  2. Run 'nix develop' again for uv2nix integration with uv-add/uv-remove"
-          '';
-        };
+        # When no uv.lock exists, throw an error
+        throw "No uv.lock file detected. Please run 'uv lock' to generate the lock file, then try 'nix develop --impure' again.";
     };
 
     # Expose useful utilities for downstream consumers
