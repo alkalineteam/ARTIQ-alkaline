@@ -61,7 +61,6 @@ dependencies = [
     "torch",
     "torchvision",
     "seaborn",
-    "scikit-learn",
 ]
 
 [project.license]

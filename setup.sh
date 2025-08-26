@@ -37,4 +37,5 @@ echo "extra-sandbox-paths = /opt" >> "$NIX_CONF1"
 grep -qxF "{ allowUnfree = true; }" "$NIX_CONF2" 2>/dev/null || \
 echo "{ allowUnfree = true; }" >> "$NIX_CONF2"
 
+sudo chmod +x fix-hashes.sh
 echo "✅ Setup complete. You will need to restart your shell for everything to work."

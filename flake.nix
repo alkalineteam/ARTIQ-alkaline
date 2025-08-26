@@ -105,6 +105,9 @@
       echo "Updating uv.lock..."
       uv lock
       
+      echo "Fixing PyTorch hashes..."
+      ./fix-hashes.sh
+      
       echo "Rebuilding environment..."
       exec nix develop --impure
     '';
@@ -220,6 +223,9 @@
       
       echo "Updating uv.lock..."
       uv lock
+      
+      echo "Fixing PyTorch hashes..."
+      ./fix-hashes.sh
       
       echo "Rebuilding environment..."
       exec nix develop --impure
