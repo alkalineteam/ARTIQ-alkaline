@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Hash Fix Script
 # This script ensures PyTorch wheel hashes are present in uv.lock
 # Run this before 'nix develop --impure' if you encounter PyTorch hash errors
-
-echo "🔧 Hash Fix Script"
-echo "=================="
 
 # Check if uv.lock exists
 if [ ! -f "uv.lock" ]; then
@@ -15,7 +11,7 @@ if [ ! -f "uv.lock" ]; then
     exit 1
 fi
 
-echo "📁 Found uv.lock file"
+# echo "📁 Found uv.lock file"
 echo "🔍 Checking for PyTorch wheel hashes..."
 
 # Use Python to add missing hashes
@@ -51,8 +47,4 @@ except Exception as e:
     exit(1)
 "
 
-echo ""
-echo "🚀 Ready to run: nix develop --impure"
-echo ""
-echo "💡 Tip: Run this script after any 'uv lock' operation to ensure"
-echo "   PyTorch hashes remain in place."
+echo "💡 Tip: Run this script after any 'uv lock' operation to ensure PyTorch hashes are in place."
