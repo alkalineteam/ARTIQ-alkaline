@@ -145,6 +145,17 @@ def uv_lock_hashes():
                     missing += 1
     record("lock:pytorch_hashes", missing == 0, f"missing={missing}")
 
+def opengl_check():
+    # Attempt to dlopen libGL (optional diagnostic)
+    try:
+        import ctypes
+        ctypes.CDLL("libGL.so.1")
+        record("opengl:libGL", True, "loaded")
+    except OSError as e:
+        record("opengl:libGL", False, str(e))
+    except Exception as e:  # pragma: no cover
+        record("opengl:libGL", False, repr(e))
+
 import shutil  # placed after function definitions to avoid reordering above
 
 def summarize():
@@ -172,6 +183,7 @@ def main():
     artiq_cli()
     wrappers_check()
     uv_lock_hashes()
+    opengl_check()
     summarize()
 
 if __name__ == "__main__":
