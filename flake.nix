@@ -535,8 +535,8 @@ include = ["qasync*"]
             fi
             export LD_LIBRARY_PATH="${pkgs.fontconfig.lib or pkgs.fontconfig}/lib:${pkgs.zstd.lib or pkgs.zstd}/lib:${pkgs.freetype.out}/lib:${pkgs.libpng}/lib:${pkgs.libjpeg}/lib:${pkgs.dbus.lib or pkgs.dbus}/lib:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:$ZSTD_LIB:${pkgs.glib.out}/lib:${pkgs.libxkbcommon}/lib:${pkgs.alsa-lib}/lib:${pkgs.xorg.libX11}/lib:${pkgs.xorg.libXext}/lib:${pkgs.xorg.libXrender}/lib:${pkgs.xorg.libxcb}/lib:${pkgs.xorg.libXi}/lib:${pkgs.xorg.libXfixes}/lib:${pkgs.xorg.libXcursor}/lib:${pkgs.xorg.libXrandr}/lib:${pkgs.xorg.libXdamage}/lib:${pkgs.xorg.libXcomposite}/lib:${pkgs.xorg.libXau}/lib:${pkgs.xorg.libXdmcp}/lib:${pkgs.xorg.libXtst}/lib:${pkgs.libglvnd}/lib:${pkgs.mesa}/lib:$LD_LIBRARY_PATH"
             # Provide DRI drivers for Mesa (software / non-NVIDIA rendering)
-            if [ -d "${pkgs.mesa.drivers or pkgs.mesa}/lib/dri" ]; then
-              export LIBGL_DRIVERS_PATH="${pkgs.mesa.drivers or pkgs.mesa}/lib/dri"
+            if [ -d "${pkgs.mesa}/lib/dri" ]; then
+              export LIBGL_DRIVERS_PATH="${pkgs.mesa}/lib/dri"
             fi
 
             # Ensure QML2_IMPORT_PATH points to an existing directory; probe common qt6 locations if unset/invalid
@@ -610,8 +610,9 @@ include = ["qasync*"]
               echo "💡 Running in CPU-only mode"
               ${if !hasNvidiaGpu then ''echo "   (no NVIDIA GPU detected at build time)"'' else ""}
             fi
-      # Quick OpenGL probe (non-fatal)
-      python - <<'PY' 2>/dev/null || true
+      # Optional OpenGL probe (set OPENGL_PROBE=1 before entering shell to enable)
+            if [ "''${OPENGL_PROBE:-0}" = "1" ]; then
+        python - <<'PY' 2>/dev/null || true
 import ctypes
 try:
   ctypes.CDLL('libGL.so.1')
@@ -619,6 +620,7 @@ try:
 except OSError as e:
   print('OpenGL: libGL.so.1 missing ->', e)
 PY
+      fi
             if [ -z "$(ls ${pkgs.libglvnd}/lib/libGL.so.1 2>/dev/null)" ]; then
               echo "(diagnostic) libGL.so.1 not present in libglvnd store path: ${pkgs.libglvnd}/lib" >&2
             fi
