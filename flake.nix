@@ -318,20 +318,20 @@
         torchvision = fixCudaPackage "torchvision" (prev.torchvision or null);
       };
 
-    # Overlay to ensure PyQt6 wheel finds required Qt6 libraries (auto-patchelf)
+    # Wheel-based PyQt6 overlay (disable auto-patchelf, keep runtime deps via env)
     pyqtFixOverlay = final: prev: {
       pyqt6 = if prev ? pyqt6 then prev.pyqt6.overrideAttrs (old: {
         dontAutoPatchelf = true;
-        propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [ pkgs.fontconfig pkgs.zstd ];
+        propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [ final.pkgs.fontconfig final.pkgs.zstd ];
         postInstall = (old.postInstall or "") + ''
-          echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt6 (using wheel RPATH)"
+          echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt6 (wheel RPATH)"
         '';
       }) else prev.pyqt6 or null;
       pyqt6-qt6 = if prev ? pyqt6-qt6 then prev.pyqt6-qt6.overrideAttrs (old: {
         dontAutoPatchelf = true;
-        propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [ pkgs.fontconfig pkgs.zstd ];
+        propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [ final.pkgs.fontconfig final.pkgs.zstd ];
         postInstall = (old.postInstall or "") + ''
-          echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt6-qt6 (using wheel RPATH)"
+          echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt6-qt6 (wheel RPATH)"
         '';
       }) else prev.pyqt6-qt6 or null;
     };
@@ -486,6 +486,10 @@ include = ["qasync*"]
             pkgs.fontconfig
             # zstd needed for Qt plugin compression support (provides libzstd.so.1)
             pkgs.zstd
+            # Qt Declarative (QML) modules to ensure QML2_IMPORT_PATH exists
+            pkgs.qt6.qtdeclarative
+            # Also include qtbase explicitly so we can probe its layout
+            pkgs.qt6.qtbase
             # nixGL for NVIDIA driver access - conditionally enabled
             (nixgl-pkgs.nixGLNvidia or null)
             # Add any additional tools you need
@@ -521,16 +525,39 @@ include = ["qasync*"]
             export PYTHONPATH="${editablePythonSet.microscope}/${python.sitePackages}:$PYTHONPATH"
             export PYTHONPATH="${editablePythonSet.sipyco}/${python.sitePackages}:$PYTHONPATH"
             
-            # Ensure libstdc++ is available for binary wheels (PyTorch, etc.)
-            # zstd has a separate 'bin' output; ensure we point to the output containing libzstd.so.1
+            # Provide wheel runtime libs for PyQt6/qasync
             ZSTD_LIB="${pkgs.zstd.out or pkgs.zstd}/lib"
             if [ ! -e "$ZSTD_LIB/libzstd.so.1" ]; then
-              # Fallback: search store path for libzstd if layout differs
               ZSTD_LIB=$(dirname $(fd -a libzstd.so.1 ${pkgs.zstd} 2>/dev/null | head -n1 || true))
             fi
-            # Discover actual location of libfontconfig.so.1 (fontconfig may have split outputs: bin vs out)
-            # Ensure proper library outputs for fontconfig & zstd are present (they ship libs in separate outputs)
             export LD_LIBRARY_PATH="${pkgs.fontconfig.lib or pkgs.fontconfig}/lib:${pkgs.zstd.lib or pkgs.zstd}/lib:${pkgs.freetype.out}/lib:${pkgs.libpng}/lib:${pkgs.libjpeg}/lib:${pkgs.dbus.lib or pkgs.dbus}/lib:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:$ZSTD_LIB:${pkgs.glib.out}/lib:${pkgs.libxkbcommon}/lib:${pkgs.alsa-lib}/lib:${pkgs.xorg.libX11}/lib:${pkgs.xorg.libXext}/lib:${pkgs.xorg.libXrender}/lib:${pkgs.xorg.libxcb}/lib:${pkgs.xorg.libXi}/lib:${pkgs.xorg.libXfixes}/lib:${pkgs.xorg.libXcursor}/lib:${pkgs.xorg.libXrandr}/lib:${pkgs.xorg.libXdamage}/lib:${pkgs.xorg.libXcomposite}/lib:${pkgs.xorg.libXau}/lib:${pkgs.xorg.libXdmcp}/lib:${pkgs.xorg.libXtst}/lib:$LD_LIBRARY_PATH"
+
+            # Ensure QML2_IMPORT_PATH points to an existing directory; probe common qt6 locations if unset/invalid
+            # Build QML2_IMPORT_PATH from all existing candidate directories (first element previously set may not exist)
+            CANDIDATE_QML_DIRS="${pkgs.qt6.qtdeclarative}/lib/qt6/qml ${pkgs.qt6.qtdeclarative}/lib/qt-6/qml ${pkgs.qt6.qtdeclarative}/share/qt6/qml ${pkgs.qt6.qtdeclarative}/share/qt/qml ${pkgs.qt6.qtbase}/lib/qt6/qml ${pkgs.qt6.qtbase}/lib/qt-6/qml ${pkgs.qt6.qtbase}/share/qt6/qml ${pkgs.qt6.qtbase}/share/qt/qml"
+            # Also probe inside the PyQt6 wheel (structure varies)
+            if [ -d "$VIRTUAL_ENV" ]; then
+              for wheelDir in "$(echo $VIRTUAL_ENV)/lib"/python*/site-packages/PyQt6/Qt6/qml; do
+                if [ -d "$wheelDir" ]; then
+                  CANDIDATE_QML_DIRS="$CANDIDATE_QML_DIRS $wheelDir"
+                fi
+              done
+            fi
+            NEW_QML_PATHS=""
+            for d in $CANDIDATE_QML_DIRS; do
+              if [ -d "$d" ]; then
+                if [ -z "$NEW_QML_PATHS" ]; then NEW_QML_PATHS="$d"; else NEW_QML_PATHS="$NEW_QML_PATHS:$d"; fi
+              fi
+            done
+            # Prefer detected directories; fall back to existing value only if it exists
+            if [ -n "$NEW_QML_PATHS" ]; then
+              export QML2_IMPORT_PATH="$NEW_QML_PATHS"
+            elif [ -n "$QML2_IMPORT_PATH" ]; then
+              first_qml_dir=$(printf '%s' "$QML2_IMPORT_PATH" | cut -d: -f1)
+              if [ ! -d "$first_qml_dir" ]; then
+                unset QML2_IMPORT_PATH
+              fi
+            fi
             
             # CUDA environment setup
             export CUDA_PATH=/usr/local/cuda
