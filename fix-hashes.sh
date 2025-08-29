@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# This script ensures PyTorch wheel hashes are present in uv.lock
-# Run this before 'nix develop --impure' if you encounter PyTorch hash errors
+# This script ensures ALL PyTorch / NVIDIA CUDA wheel hashes are present in uv.lock
+# It scans uv.lock for any wheel URLs hosted at download.pytorch.org that lack a hash field
+# and inserts the computed sha256 so Nix stops emitting "missing hash" warnings.
+#
+# Usage:
+#   ./fix-hashes.sh            # adds any missing hashes in-place
+#   NOCACHE=1 ./fix-hashes.sh   # force re-download even if cached
+#
+# Requires: bash, python3, network access.
 
 # Check if uv.lock exists
 if [ ! -f "uv.lock" ]; then
@@ -14,37 +21,81 @@ fi
 # echo "📁 Found uv.lock file"
 echo "🔍 Checking for PyTorch wheel hashes..."
 
-# Use Python to add missing hashes
-python3 -c "
-torch_hashes = {
-    'torch-2.8.0%2Bcu129-cp313-cp313-manylinux_2_28_x86_64.whl': 'sha256:563740167be2189b71530b503f0c8a8d7a8267dd49d4de6f9c5f1d23fbe237df',
-    'torch-2.8.0%2Bcu129-cp313-cp313-win_amd64.whl': 'sha256:2cef066f9759ff4d7868a8c3695aa60d9a878598acb3685bb1ef2fdac29dcd68',
-    'torch-2.8.0%2Bcu129-cp313-cp313t-manylinux_2_28_x86_64.whl': 'sha256:6344260959ebcfa6dae458e1c4365195bcfdf00f4f1f1ad438cbaf50756829ed',
-    'torch-2.8.0%2Bcu129-cp313-cp313t-win_amd64.whl': 'sha256:9c0cd89e54ce3208c5cf4163773b9cda0067e4b48cfcac56a4e04af52040'
-}
+python3 - <<'PY'
+import hashlib, os, re, sys, urllib.request, tempfile, time
 
-try:
-    with open('uv.lock', 'r') as f:
-        content = f.read()
-    
-    modified = False
-    for wheel_name, wheel_hash in torch_hashes.items():
-        pattern = '{{ url = \"https://download.pytorch.org/whl/cu129/{}\" }},'.format(wheel_name)
-        replacement = '{{ url = \"https://download.pytorch.org/whl/cu129/{}\", hash = \"{}\" }},'.format(wheel_name, wheel_hash)
-        if pattern in content and replacement not in content:
-            content = content.replace(pattern, replacement)
-            modified = True
-            print(f'  ✅ Added hash for {wheel_name}')
-    
-    if modified:
-        with open('uv.lock', 'w') as f:
-            f.write(content)
-        print('\\n✅ PyTorch wheel hashes added to uv.lock successfully!')
+LOCK_PATH = 'uv.lock'
+if not os.path.isfile(LOCK_PATH):
+    print('❌ uv.lock disappeared during run')
+    sys.exit(1)
+
+with open(LOCK_PATH, 'r') as f:
+    content = f.read()
+
+# Regex to find wheel entries without hash
+wheel_re = re.compile(r'(\{ *url *= *"(https://download\.pytorch\.org/[^" ]+?\.whl)" *\})')
+
+missing = []
+for m in wheel_re.finditer(content):
+    full_entry = m.group(1)
+    url = m.group(2)
+    # If the entry already has hash (some variant) skip
+    # (We matched only entries without hash but double-check in case pattern broadens.)
+    if 'hash =' in full_entry:
+        continue
+    missing.append((full_entry, url))
+
+if not missing:
+    print('✅ No missing PyTorch / NVIDIA wheel hashes found.')
+    sys.exit(0)
+
+print(f'🧪 Found {len(missing)} wheel(s) missing hashes — downloading...')
+
+cache_dir = os.path.join(tempfile.gettempdir(), 'pytorch-wheel-hashes')
+os.makedirs(cache_dir, exist_ok=True)
+force = bool(os.environ.get('NOCACHE'))
+
+def sha256_of(path):
+    h = hashlib.sha256()
+    with open(path, 'rb') as fp:
+        for chunk in iter(lambda: fp.read(1<<20), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+updated = 0
+for full_entry, url in missing:
+    name = url.rsplit('/', 1)[-1]
+    local_path = os.path.join(cache_dir, name)
+    if not os.path.exists(local_path) or force:
+        try:
+            print(f'  ↓ Fetch {name}')
+            with urllib.request.urlopen(url, timeout=120) as r, open(local_path, 'wb') as out:
+                out.write(r.read())
+        except Exception as e:
+            print(f'  ❌ Failed to download {url}: {e}')
+            continue
     else:
-        print('✅ All PyTorch wheel hashes are already present')
-except Exception as e:
-    print(f'❌ Error processing uv.lock: {e}')
-    exit(1)
-"
+        print(f'  • Using cached {name}')
+    digest = sha256_of(local_path)
+    # Construct replacement with hash inserted
+    replacement = f'{{ url = "{url}", hash = "sha256:{digest}" }}'
+    # Replace only the first occurrence of the specific entry
+    content, n = re.subn(re.escape(full_entry), replacement, content, count=1)
+    if n == 1:
+        updated += 1
+        print(f'    ✅ Added hash sha256:{digest[:12]}…')
+    else:
+        print(f'    ⚠ Could not patch entry for {url}')
 
-echo "💡 Tip: Run this script after any 'uv lock' operation to ensure PyTorch hashes are in place."
+if updated:
+    backup = LOCK_PATH + f'.bak.{int(time.time())}'
+    with open(backup, 'w') as b:
+        b.write(content)
+    with open(LOCK_PATH, 'w') as f:
+        f.write(content)
+    print(f'\n✅ Added hashes for {updated} wheel(s). Backup saved to {backup}')
+else:
+    print('ℹ No entries updated (all failed or already hashed).')
+PY
+
+echo "💡 Tip: Run after 'uv lock' whenever you change torch / CUDA versions. Commit uv.lock afterward."
