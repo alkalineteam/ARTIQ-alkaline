@@ -66,13 +66,9 @@ Otherwise Nix evaluation may fail on PyTorch wheels missing a `hash =` attribute
 
 ## PyTorch & Hash Repair
 
-`fix-hashes.sh` injects SHA256 hashes for selected cu129 wheels (PyTorch 2.8.0) that appear without hashes in `uv.lock`. This is a temporary workaround until either:
+`fix-hashes.sh` dynamically scans `uv.lock` for any PyTorch / NVIDIA (download.pytorch.org) wheel entries missing a `hash = "sha256:…"` attribute, downloads each wheel, computes its SHA256, and injects the value in place. It is idempotent: once all hashes are present it performs no changes.
 
-- uv2nix supports these wheels with proper hash metadata, or
-- The wheel set is trimmed to a single target platform, or
-- PyTorch packaging normalizes URL encoding / upstream indices provide hashes directly.
-
-Re-running the script is safe and no-op once all targeted hashes exist.
+Run it after every `uv lock` (the helper wrappers already do this) or let the provided git hook handle it automatically (see below). Missing hashes otherwise cause Nix evaluation failures / warnings.
 
 ## GPU / CUDA Usage
 
@@ -88,7 +84,9 @@ flake.nix          - Nix flake (env, overlays, wrappers)
 pyproject.toml     - Project & dependency metadata (managed via uv-add/uv-remove)
 uv.lock            - Locked dependency graph (consumed by uv2nix)
 fix-hashes.sh      - PyTorch wheel hash injector (idempotent)
+enable-git-hooks.sh - Helper to activate in-repo git hooks
 scripts/           - Helper scripts & CUDA tests (e.g. test_cuda.py)
+scripts/smoke.py    - Quick import + CUDA availability smoke test
 setup.sh           - Optional host bootstrap (enables flakes, installs Nix)
 artiq_fork.egg-info/ (generated metadata)
 ```
@@ -106,7 +104,7 @@ artiq_fork.egg-info/ (generated metadata)
 |-------|-------|------------|
 | Nix evaluation fails on PyTorch wheel path | Missing hash in `uv.lock` | Run `./fix-hashes.sh` (or use wrappers) |
 | GPU not detected | No /dev/nvidia* present at eval time | Ensure driver installed; enter shell after driver load |
-| New torch version introduced | Hash script map outdated | Update script or trim to single platform wheels |
+| New torch / CUDA wheels introduced | Script needs to re-run | `./fix-hashes.sh` (hook handles this automatically) |
 | Dependency not added | Manual edit bypassed wrappers | Use `uv-add <pkg>` and commit updated lock |
 
 ## Contributing
@@ -117,9 +115,26 @@ Pull requests welcome (keep changes reproducible: update both `pyproject.toml` +
 
 LGPL-3.0-or-later (inherits ARTIQ licensing)
 
+## Git Hook (Optional but Recommended)
+
+A pre-commit hook is included to guarantee `uv.lock` always has current PyTorch / CUDA wheel hashes.
+
+Enable it once (stored in-tree, so it works for all collaborators):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+After enabling, every commit will:
+
+1. Run `./fix-hashes.sh`
+2. Stage `uv.lock` if hashes were added
+3. Abort the commit if hashing fails (e.g. temporary network issue)
+
+You can bypass (not recommended) with `--no-verify` on `git commit`.
+
 ## Future Improvements (Planned / Suggestions)
 
-- Auto-generate hashes dynamically (fetch + compute) rather than static map
 - Reduce lock to target platform only to drop extraneous wheels
 - CI: `nix flake check`, import smoke tests, mypy / linting
 - Optional separation of dev-only dependencies into a group

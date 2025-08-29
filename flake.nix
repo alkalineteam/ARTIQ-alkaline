@@ -322,14 +322,16 @@
     pyqtFixOverlay = final: prev: {
       pyqt6 = if prev ? pyqt6 then prev.pyqt6.overrideAttrs (old: {
         dontAutoPatchelf = true;
+        propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [ pkgs.fontconfig pkgs.zstd ];
         postInstall = (old.postInstall or "") + ''
-          echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt6"
+          echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt6 (using wheel RPATH)"
         '';
       }) else prev.pyqt6 or null;
       pyqt6-qt6 = if prev ? pyqt6-qt6 then prev.pyqt6-qt6.overrideAttrs (old: {
         dontAutoPatchelf = true;
+        propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [ pkgs.fontconfig pkgs.zstd ];
         postInstall = (old.postInstall or "") + ''
-          echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt6-qt6"
+          echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt6-qt6 (using wheel RPATH)"
         '';
       }) else prev.pyqt6-qt6 or null;
     };
@@ -480,6 +482,10 @@ include = ["qasync*"]
             pkgs.stdenv.cc.cc.lib
             # RDMA/InfiniBand libraries for CUDA packages
             pkgs.rdma-core
+            # Fontconfig needed at runtime by Qt (PyQt/qasync) for font discovery
+            pkgs.fontconfig
+            # zstd needed for Qt plugin compression support (provides libzstd.so.1)
+            pkgs.zstd
             # nixGL for NVIDIA driver access - conditionally enabled
             (nixgl-pkgs.nixGLNvidia or null)
             # Add any additional tools you need
@@ -516,7 +522,15 @@ include = ["qasync*"]
             export PYTHONPATH="${editablePythonSet.sipyco}/${python.sitePackages}:$PYTHONPATH"
             
             # Ensure libstdc++ is available for binary wheels (PyTorch, etc.)
-            export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:$LD_LIBRARY_PATH"
+            # zstd has a separate 'bin' output; ensure we point to the output containing libzstd.so.1
+            ZSTD_LIB="${pkgs.zstd.out or pkgs.zstd}/lib"
+            if [ ! -e "$ZSTD_LIB/libzstd.so.1" ]; then
+              # Fallback: search store path for libzstd if layout differs
+              ZSTD_LIB=$(dirname $(fd -a libzstd.so.1 ${pkgs.zstd} 2>/dev/null | head -n1 || true))
+            fi
+            # Discover actual location of libfontconfig.so.1 (fontconfig may have split outputs: bin vs out)
+            # Ensure proper library outputs for fontconfig & zstd are present (they ship libs in separate outputs)
+            export LD_LIBRARY_PATH="${pkgs.fontconfig.lib or pkgs.fontconfig}/lib:${pkgs.zstd.lib or pkgs.zstd}/lib:${pkgs.freetype.out}/lib:${pkgs.libpng}/lib:${pkgs.libjpeg}/lib:${pkgs.dbus.lib or pkgs.dbus}/lib:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:$ZSTD_LIB:${pkgs.glib.out}/lib:${pkgs.libxkbcommon}/lib:${pkgs.alsa-lib}/lib:${pkgs.xorg.libX11}/lib:${pkgs.xorg.libXext}/lib:${pkgs.xorg.libXrender}/lib:${pkgs.xorg.libxcb}/lib:${pkgs.xorg.libXi}/lib:${pkgs.xorg.libXfixes}/lib:${pkgs.xorg.libXcursor}/lib:${pkgs.xorg.libXrandr}/lib:${pkgs.xorg.libXdamage}/lib:${pkgs.xorg.libXcomposite}/lib:${pkgs.xorg.libXau}/lib:${pkgs.xorg.libXdmcp}/lib:${pkgs.xorg.libXtst}/lib:$LD_LIBRARY_PATH"
             
             # CUDA environment setup
             export CUDA_PATH=/usr/local/cuda
