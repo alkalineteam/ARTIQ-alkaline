@@ -318,6 +318,89 @@
         torchvision = fixCudaPackage "torchvision" (prev.torchvision or null);
       };
 
+    # Overlay to ensure PyQt6 wheel finds required Qt6 libraries (auto-patchelf)
+    pyqtFixOverlay = final: prev: {
+      pyqt6 = if prev ? pyqt6 then prev.pyqt6.overrideAttrs (old: {
+        dontAutoPatchelf = true;
+        postInstall = (old.postInstall or "") + ''
+          echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt6"
+        '';
+      }) else prev.pyqt6 or null;
+      pyqt6-qt6 = if prev ? pyqt6-qt6 then prev.pyqt6-qt6.overrideAttrs (old: {
+        dontAutoPatchelf = true;
+        postInstall = (old.postInstall or "") + ''
+          echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt6-qt6"
+        '';
+      }) else prev.pyqt6-qt6 or null;
+    };
+
+    # Helper scripts for forcing setuptools on selected packages
+    bootstrap = final: pkg: ''
+      export PYTHONPATH=${final.python.pkgs.setuptools}/${final.python.sitePackages}:${final.python.pkgs.wheel}/${final.python.sitePackages}:$PYTHONPATH
+      echo "[overlay:${pkg}] prepended setuptools+wheel to PYTHONPATH"
+    '';
+    rewritePoetry = name: body: ''
+      if [ -f pyproject.toml ] && grep -q '^\[tool.poetry\]' pyproject.toml; then
+        echo "[overlay:${name}] rewriting Poetry pyproject to setuptools"
+        cat > pyproject.toml <<'EOF'
+${body}
+EOF
+      fi
+    '';
+
+    # Overlay to adapt ndscan & oitg build backends to setuptools
+    ndscanOitgOverlay = final: prev: {
+      ndscan = if prev ? ndscan then prev.ndscan.overrideAttrs (old: {
+        # Keep setuptools available but don't mutate upstream pyproject
+        nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ final.python.pkgs.setuptools final.python.pkgs.wheel ];
+        preBuild = (old.preBuild or "") + (bootstrap final "ndscan");
+      }) else prev.ndscan or null;
+
+      oitg = if prev ? oitg then prev.oitg.overrideAttrs (old: {
+        nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ final.python.pkgs.setuptools final.python.pkgs.wheel ];
+        postPatch = (old.postPatch or "") + (rewritePoetry "oitg" ''
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oitg"
+version = "0.1"
+requires-python = ">=3.10"
+dependencies = [
+  "statsmodels>=0.14.0",
+  "scipy>=1.11.4",
+  "numpy>=1.24.2",
+  "h5py>=3.10.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["oitg*"]
+exclude = ["conda*"]
+'');
+        preBuild = (old.preBuild or "") + (bootstrap final "oitg");
+      }) else prev.oitg or null;
+
+      qasync = if prev ? qasync then prev.qasync.overrideAttrs (old: {
+        nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ final.python.pkgs.setuptools final.python.pkgs.wheel ];
+        postPatch = (old.postPatch or "") + (rewritePoetry "qasync" ''
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qasync"
+version = "0.27.2"
+requires-python = ">=3.9"
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["qasync*"]
+'');
+        preBuild = (old.preBuild or "") + (bootstrap final "qasync");
+      }) else prev.qasync or null;
+    };
+
     # Construct Python package set with uv2nix if available
     pythonSet = if workspace != null then
       # uv2nix approach - create enhanced package set
@@ -328,6 +411,8 @@
           pyproject-build-systems.overlays.default
           uv2nixOverlay
           cudaFixOverlay
+          pyqtFixOverlay
+          ndscanOitgOverlay
           # Add ARTIQ and related packages
           (final: prev: {
             # Just inherit ARTIQ directly - this is simpler and more reliable
