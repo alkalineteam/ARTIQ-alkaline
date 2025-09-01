@@ -1,4 +1,5 @@
 import torch
+from ndscan.experiment import Fragment
 import torchvision
 # import torchaudio
 import pandas as pd
@@ -23,4 +24,4 @@ print(torch.tensor([1, 2, 3]))
 print(torch.cuda.is_available())
 print(torch.version.cuda)
 print(torch.cuda.device_count())
-print(torch.cuda.get_device_name(0)) 
+print(torch.cuda.get_device_name(0))

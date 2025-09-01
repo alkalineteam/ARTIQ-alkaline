@@ -61,6 +61,9 @@ dependencies = [
     "torch",
     "torchvision",
     "seaborn",
+    "AllenTools",
+    "ndscan",
+    "setuptools",
     "scikit-learn",
 ]
 
@@ -80,6 +83,10 @@ index = [
 
 [tool.uv.sources.torch]
 index = "pytorch-cuda"
+
+[tool.uv.sources.ndscan]
+git = "https://github.com/alkalineteam/ndscan.git"
+branch = "setuptools-build"
 
 [tool.setuptools]
 zip-safe = false

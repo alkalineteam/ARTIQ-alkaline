@@ -105,6 +105,9 @@
       echo "Updating uv.lock..."
       uv lock
       
+      echo "Fixing PyTorch hashes..."
+      ./fix-hashes.sh
+      
       echo "Rebuilding environment..."
       exec nix develop --impure
     '';
@@ -221,6 +224,9 @@
       echo "Updating uv.lock..."
       uv lock
       
+      echo "Fixing PyTorch hashes..."
+      ./fix-hashes.sh
+      
       echo "Rebuilding environment..."
       exec nix develop --impure
     '';
@@ -312,6 +318,91 @@
         torchvision = fixCudaPackage "torchvision" (prev.torchvision or null);
       };
 
+    # Wheel-based PyQt6 overlay (disable auto-patchelf, keep runtime deps via env)
+    pyqtFixOverlay = final: prev: {
+      pyqt6 = if prev ? pyqt6 then prev.pyqt6.overrideAttrs (old: {
+        dontAutoPatchelf = true;
+        propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [ final.pkgs.fontconfig final.pkgs.zstd ];
+        postInstall = (old.postInstall or "") + ''
+          echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt6 (wheel RPATH)"
+        '';
+      }) else prev.pyqt6 or null;
+      pyqt6-qt6 = if prev ? pyqt6-qt6 then prev.pyqt6-qt6.overrideAttrs (old: {
+        dontAutoPatchelf = true;
+        propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [ final.pkgs.fontconfig final.pkgs.zstd ];
+        postInstall = (old.postInstall or "") + ''
+          echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt6-qt6 (wheel RPATH)"
+        '';
+      }) else prev.pyqt6-qt6 or null;
+    };
+
+    # Helper scripts for forcing setuptools on selected packages
+    bootstrap = final: pkg: ''
+      export PYTHONPATH=${final.python.pkgs.setuptools}/${final.python.sitePackages}:${final.python.pkgs.wheel}/${final.python.sitePackages}:$PYTHONPATH
+      echo "[overlay:${pkg}] prepended setuptools+wheel to PYTHONPATH"
+    '';
+    rewritePoetry = name: body: ''
+      if [ -f pyproject.toml ] && grep -q '^\[tool.poetry\]' pyproject.toml; then
+        echo "[overlay:${name}] rewriting Poetry pyproject to setuptools"
+        cat > pyproject.toml <<'EOF'
+${body}
+EOF
+      fi
+    '';
+
+    # Overlay to adapt ndscan & oitg build backends to setuptools
+    ndscanOitgOverlay = final: prev: {
+      ndscan = if prev ? ndscan then prev.ndscan.overrideAttrs (old: {
+        # Keep setuptools available but don't mutate upstream pyproject
+        nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ final.python.pkgs.setuptools final.python.pkgs.wheel ];
+        preBuild = (old.preBuild or "") + (bootstrap final "ndscan");
+      }) else prev.ndscan or null;
+
+      oitg = if prev ? oitg then prev.oitg.overrideAttrs (old: {
+        nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ final.python.pkgs.setuptools final.python.pkgs.wheel ];
+        postPatch = (old.postPatch or "") + (rewritePoetry "oitg" ''
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oitg"
+version = "0.1"
+requires-python = ">=3.10"
+dependencies = [
+  "statsmodels>=0.14.0",
+  "scipy>=1.11.4",
+  "numpy>=1.24.2",
+  "h5py>=3.10.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["oitg*"]
+exclude = ["conda*"]
+'');
+        preBuild = (old.preBuild or "") + (bootstrap final "oitg");
+      }) else prev.oitg or null;
+
+      qasync = if prev ? qasync then prev.qasync.overrideAttrs (old: {
+        nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ final.python.pkgs.setuptools final.python.pkgs.wheel ];
+        postPatch = (old.postPatch or "") + (rewritePoetry "qasync" ''
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qasync"
+version = "0.27.2"
+requires-python = ">=3.9"
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["qasync*"]
+'');
+        preBuild = (old.preBuild or "") + (bootstrap final "qasync");
+      }) else prev.qasync or null;
+    };
+
     # Construct Python package set with uv2nix if available
     pythonSet = if workspace != null then
       # uv2nix approach - create enhanced package set
@@ -322,6 +413,8 @@
           pyproject-build-systems.overlays.default
           uv2nixOverlay
           cudaFixOverlay
+          pyqtFixOverlay
+          ndscanOitgOverlay
           # Add ARTIQ and related packages
           (final: prev: {
             # Just inherit ARTIQ directly - this is simpler and more reliable
@@ -357,7 +450,7 @@
     };
 
     devShells.${system} = {
-      # Main development shell with automatic uv.lock detection
+      # Main development shell - requires uv.lock to exist
       default = if workspace != null then
         # When uv.lock exists, create uv2nix development environment
         let
@@ -389,6 +482,17 @@
             pkgs.stdenv.cc.cc.lib
             # RDMA/InfiniBand libraries for CUDA packages
             pkgs.rdma-core
+            # Fontconfig needed at runtime by Qt (PyQt/qasync) for font discovery
+            pkgs.fontconfig
+            # zstd needed for Qt plugin compression support (provides libzstd.so.1)
+            pkgs.zstd
+            # Qt Declarative (QML) modules to ensure QML2_IMPORT_PATH exists
+            pkgs.qt6.qtdeclarative
+            # Also include qtbase explicitly so we can probe its layout
+            pkgs.qt6.qtbase
+            # OpenGL libraries for non-NVIDIA (and fallback software rendering)
+            pkgs.libglvnd
+            pkgs.mesa
             # nixGL for NVIDIA driver access - conditionally enabled
             (nixgl-pkgs.nixGLNvidia or null)
             # Add any additional tools you need
@@ -424,8 +528,43 @@
             export PYTHONPATH="${editablePythonSet.microscope}/${python.sitePackages}:$PYTHONPATH"
             export PYTHONPATH="${editablePythonSet.sipyco}/${python.sitePackages}:$PYTHONPATH"
             
-            # Ensure libstdc++ is available for binary wheels (PyTorch, etc.)
-            export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:$LD_LIBRARY_PATH"
+            # Provide wheel runtime libs for PyQt6/qasync
+            ZSTD_LIB="${pkgs.zstd.out or pkgs.zstd}/lib"
+            if [ ! -e "$ZSTD_LIB/libzstd.so.1" ]; then
+              ZSTD_LIB=$(dirname $(fd -a libzstd.so.1 ${pkgs.zstd} 2>/dev/null | head -n1 || true))
+            fi
+            export LD_LIBRARY_PATH="${pkgs.fontconfig.lib or pkgs.fontconfig}/lib:${pkgs.zstd.lib or pkgs.zstd}/lib:${pkgs.freetype.out}/lib:${pkgs.libpng}/lib:${pkgs.libjpeg}/lib:${pkgs.dbus.lib or pkgs.dbus}/lib:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:$ZSTD_LIB:${pkgs.glib.out}/lib:${pkgs.libxkbcommon}/lib:${pkgs.alsa-lib}/lib:${pkgs.xorg.libX11}/lib:${pkgs.xorg.libXext}/lib:${pkgs.xorg.libXrender}/lib:${pkgs.xorg.libxcb}/lib:${pkgs.xorg.libXi}/lib:${pkgs.xorg.libXfixes}/lib:${pkgs.xorg.libXcursor}/lib:${pkgs.xorg.libXrandr}/lib:${pkgs.xorg.libXdamage}/lib:${pkgs.xorg.libXcomposite}/lib:${pkgs.xorg.libXau}/lib:${pkgs.xorg.libXdmcp}/lib:${pkgs.xorg.libXtst}/lib:${pkgs.libglvnd}/lib:${pkgs.mesa}/lib:$LD_LIBRARY_PATH"
+            # Provide DRI drivers for Mesa (software / non-NVIDIA rendering)
+            if [ -d "${pkgs.mesa}/lib/dri" ]; then
+              export LIBGL_DRIVERS_PATH="${pkgs.mesa}/lib/dri"
+            fi
+
+            # Ensure QML2_IMPORT_PATH points to an existing directory; probe common qt6 locations if unset/invalid
+            # Build QML2_IMPORT_PATH from all existing candidate directories (first element previously set may not exist)
+            CANDIDATE_QML_DIRS="${pkgs.qt6.qtdeclarative}/lib/qt6/qml ${pkgs.qt6.qtdeclarative}/lib/qt-6/qml ${pkgs.qt6.qtdeclarative}/share/qt6/qml ${pkgs.qt6.qtdeclarative}/share/qt/qml ${pkgs.qt6.qtbase}/lib/qt6/qml ${pkgs.qt6.qtbase}/lib/qt-6/qml ${pkgs.qt6.qtbase}/share/qt6/qml ${pkgs.qt6.qtbase}/share/qt/qml"
+            # Also probe inside the PyQt6 wheel (structure varies)
+            if [ -d "$VIRTUAL_ENV" ]; then
+              for wheelDir in "$(echo $VIRTUAL_ENV)/lib"/python*/site-packages/PyQt6/Qt6/qml; do
+                if [ -d "$wheelDir" ]; then
+                  CANDIDATE_QML_DIRS="$CANDIDATE_QML_DIRS $wheelDir"
+                fi
+              done
+            fi
+            NEW_QML_PATHS=""
+            for d in $CANDIDATE_QML_DIRS; do
+              if [ -d "$d" ]; then
+                if [ -z "$NEW_QML_PATHS" ]; then NEW_QML_PATHS="$d"; else NEW_QML_PATHS="$NEW_QML_PATHS:$d"; fi
+              fi
+            done
+            # Prefer detected directories; fall back to existing value only if it exists
+            if [ -n "$NEW_QML_PATHS" ]; then
+              export QML2_IMPORT_PATH="$NEW_QML_PATHS"
+            elif [ -n "$QML2_IMPORT_PATH" ]; then
+              first_qml_dir=$(printf '%s' "$QML2_IMPORT_PATH" | cut -d: -f1)
+              if [ ! -d "$first_qml_dir" ]; then
+                unset QML2_IMPORT_PATH
+              fi
+            fi
             
             # CUDA environment setup
             export CUDA_PATH=/usr/local/cuda
@@ -471,6 +610,20 @@
               echo "💡 Running in CPU-only mode"
               ${if !hasNvidiaGpu then ''echo "   (no NVIDIA GPU detected at build time)"'' else ""}
             fi
+      # Optional OpenGL probe (set OPENGL_PROBE=1 before entering shell to enable)
+            if [ "''${OPENGL_PROBE:-0}" = "1" ]; then
+        python - <<'PY' 2>/dev/null || true
+import ctypes
+try:
+  ctypes.CDLL('libGL.so.1')
+  print('OpenGL: libGL.so.1 loaded')
+except OSError as e:
+  print('OpenGL: libGL.so.1 missing ->', e)
+PY
+      fi
+            if [ -z "$(ls ${pkgs.libglvnd}/lib/libGL.so.1 2>/dev/null)" ]; then
+              echo "(diagnostic) libGL.so.1 not present in libglvnd store path: ${pkgs.libglvnd}/lib" >&2
+            fi
             echo ""
             echo "To add packages:"
             echo "  uv-add <package>    - Add package and rebuild"
@@ -478,78 +631,8 @@
           '';
         }
       else
-        # When no uv.lock exists, provide minimal shell
-        pkgs.mkShell {
-          name = "artiq-fork-minimal-shell";
-          packages = builtins.filter (x: x != null) [
-            (python.withPackages (_: [artiq.packages.${system}.artiq]))
-            pkgs.uv
-            pkgs.git
-            pkgs.stdenv.cc.cc.lib
-            # RDMA/InfiniBand libraries for CUDA packages
-            pkgs.rdma-core
-            # nixGL for NVIDIA driver access - conditionally enabled
-            (nixgl-pkgs.nixGLNvidia or null)
-          ] ++ (with artiq.packages.${system}; [
-            vivadoEnv
-            vivado  
-            openocd-bscanspi
-          ]) ++ artiq.devShells.${system}.default.nativeBuildInputs;
-          
-          shellHook = ''
-            # Ensure libstdc++ is available for binary wheels (PyTorch, etc.)
-            export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:$LD_LIBRARY_PATH"
-            export REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
-            
-            # CUDA environment setup
-            export CUDA_PATH=/usr/local/cuda
-            export PATH=$CUDA_PATH/bin:$PATH
-            export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$LD_LIBRARY_PATH
-            
-            # Auto-detect NVIDIA GPU and set up nixGL aliases
-            ${if nixgl-pkgs ? nixGLNvidia then ''
-              if command -v lspci >/dev/null 2>&1 && lspci | grep -i nvidia > /dev/null 2>&1; then
-                # NVIDIA GPU detected
-                NIXGL_BIN=$(find ${nixgl-pkgs.nixGLNvidia}/bin -name "nixGLNvidia-*" 2>/dev/null | head -n1)
-                GPU_TYPE="NVIDIA"
-                
-                if [ -n "$NIXGL_BIN" ]; then
-                  alias python="$NIXGL_BIN python"
-                  alias python3="$NIXGL_BIN python3"
-                  alias jupyter="$NIXGL_BIN jupyter"
-                  alias ipython="$NIXGL_BIN ipython"
-                  export NIXGL_BIN="$NIXGL_BIN"
-                fi
-              else
-                # No NVIDIA GPU or lspci not available - use CPU-only mode
-                NIXGL_BIN=""
-                GPU_TYPE="CPU-only"
-              fi
-            '' else ''
-              # nixGL not available - use CPU-only mode
-              NIXGL_BIN=""
-              GPU_TYPE="CPU-only (nixGL unavailable)"
-            ''}
-            
-            echo "ARTIQ Fork minimal environment (no uv.lock detected)"
-            echo "✅ PyTorch dev shell with nixGL ($GPU_TYPE) is ready!"
-            if [ -n "$NIXGL_BIN" ]; then
-              echo "💡 python3 and jupyter use GPU acceleration automatically"
-            else
-              echo "💡 Running in CPU-only mode"
-              ${if !hasNvidiaGpu then ''echo "   (no NVIDIA GPU detected at build time)"'' else ""}
-            fi
-            echo "ARTIQ: $(artiq_master --version 2>/dev/null || echo 'available')"
-            echo ""
-            echo "For CUDA/GPU applications:"
-            echo "  python-cuda script.py - Run Python with GPU access"
-            echo "  cuda-run <command>    - Run any command with GPU access"
-            echo ""
-            echo "To enable full-stack environment:"
-            echo "  1. Run 'uv lock' to generate uv.lock from pyproject.toml"
-            echo "  2. Run 'nix develop' again for uv2nix integration with uv-add/uv-remove"
-          '';
-        };
+        # When no uv.lock exists, throw an error
+        throw "No uv.lock file detected. Please run 'uv lock' to generate the lock file, then try 'nix develop --impure' again.";
     };
 
     # Expose useful utilities for downstream consumers

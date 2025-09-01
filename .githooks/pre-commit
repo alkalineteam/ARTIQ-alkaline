@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Git pre-commit hook: ensure all PyTorch / NVIDIA wheel hashes exist in uv.lock.
+# Automatically runs fix-hashes.sh and stages uv.lock if it changed.
+# Enable with:  git config core.hooksPath .githooks
+
+if [ -f "fix-hashes.sh" ] && [ -f "uv.lock" ]; then
+  echo "[pre-commit] Verifying PyTorch / CUDA wheel hashes..."
+  # Run the script (prefix its output for clarity)
+  if ./fix-hashes.sh | sed 's/^/[fix-hashes] /'; then
+    if ! git diff --quiet -- uv.lock; then
+      echo "[pre-commit] Staging updated uv.lock"
+      git add uv.lock
+    fi
+  else
+    echo "[pre-commit] fix-hashes.sh failed – aborting commit." >&2
+    exit 1
+  fi
+fi
+
+exit 0
