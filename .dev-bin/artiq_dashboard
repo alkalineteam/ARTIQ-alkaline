@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-if [ -n "$NIXGL_BIN" ]; then
-  exec "$NIXGL_BIN" /nix/store/z40bx16120zirc4as8mq6wv2fjw2c0iv-artiq-fork-dev-env/bin/python -m artiq.frontend.artiq_dashboard "$@"
-else
-  exec /nix/store/z40bx16120zirc4as8mq6wv2fjw2c0iv-artiq-fork-dev-env/bin/python -m artiq.frontend.artiq_dashboard "$@"
-fi
