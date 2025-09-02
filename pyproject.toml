@@ -63,6 +63,10 @@ dependencies = [
     "seaborn",
     "AllenTools",
     "ndscan",
+    # Required by ARTIQ core compiler (python subset parser)
+    "pythonparser",
+    # Fuzzy string similarity needed by ARTIQ embedding (imports Levenshtein)
+    "python-Levenshtein",
     "setuptools",
     "scikit-learn",
 ]
@@ -87,6 +91,7 @@ index = "pytorch-cuda"
 [tool.uv.sources.ndscan]
 git = "https://github.com/alkalineteam/ndscan.git"
 branch = "setuptools-build"
+
 
 [tool.setuptools]
 zip-safe = false
