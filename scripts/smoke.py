@@ -17,6 +17,29 @@ Exits non‑zero on any failure. Designed to be fast (<1s if GPU warm).
 from __future__ import annotations
 import importlib, os, sys, traceback, textwrap, time
 
+# Early guidance: if not inside the Nix dev shell, most imports will fail.
+if "VIRTUAL_ENV" not in os.environ and not os.environ.get("UV_PYTHON"):
+    guess = None
+    # Try to locate a Nix-provided virtualenv in the store (pattern *-artiq-fork-dev-env)
+    store = "/nix/store"
+    try:
+        if os.path.isdir(store):
+            for name in os.listdir(store):
+                if name.endswith("-artiq-fork-dev-env"):
+                    guess = os.path.join(store, name)
+                    break
+    except Exception:  # pragma: no cover - best effort only
+        pass
+    msg = [
+        "[smoke] Warning: Not inside 'nix develop' shell (VIRTUAL_ENV unset).",
+        "         Run either:",
+        "           nix develop --impure",
+        "           python scripts/smoke.py",
+    ]
+    if guess:
+        msg.append(f"         Or invoke its python directly: {guess}/bin/python scripts/smoke.py")
+    print("\n" + "\n".join(msg) + "\n")
+
 RESULTS: list[tuple[str, bool, str]] = []
 
 def record(name: str, ok: bool, detail: str = ""):

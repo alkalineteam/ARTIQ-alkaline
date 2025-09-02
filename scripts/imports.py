@@ -1,4 +1,5 @@
 import torch
+from torch import version as torch_version
 from ndscan.experiment import Fragment
 import torchvision
 # import torchaudio
@@ -22,6 +23,9 @@ print(opt_foo2(t1, t2))
 print(torch.__version__)
 print(torch.tensor([1, 2, 3]))
 print(torch.cuda.is_available())
-print(torch.version.cuda)
+print(getattr(torch_version, 'cuda', 'unknown_cuda_version'))
 print(torch.cuda.device_count())
-print(torch.cuda.get_device_name(0))
+if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+    print(torch.cuda.get_device_name(0))
+else:
+    print("[CUDA] No GPU detected (torch.cuda.is_available() is False or device_count == 0); skipping device name query.")

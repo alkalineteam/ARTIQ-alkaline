@@ -415,6 +415,14 @@ include = ["qasync*"]
           cudaFixOverlay
           pyqtFixOverlay
           ndscanOitgOverlay
+          # Ensure pythonparser (legacy setup.py, no pyproject) builds under uv2nix by injecting setuptools/wheel
+          (final: prev: {
+            pythonparser = if prev ? pythonparser then prev.pythonparser.overrideAttrs (old: {
+              nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ final.python.pkgs.setuptools final.python.pkgs.wheel ];
+              buildInputs = (old.buildInputs or []) ++ [ final.python.pkgs.setuptools ];
+              preBuild = (old.preBuild or "") + (bootstrap final "pythonparser");
+            }) else prev.pythonparser or null;
+          })
           # Add ARTIQ and related packages
           (final: prev: {
             # Just inherit ARTIQ directly - this is simpler and more reliable
@@ -474,6 +482,8 @@ include = ["qasync*"]
             pkgs.uv
             uvAddWrapper
             uvRemoveWrapper
+            # llvmlite needed when invoking ARTIQ frontends via virtualenv python
+            python.pkgs.llvmlite
             # Include essential ARTIQ development tools
             pkgs.git
             pkgs.llvm_15
@@ -519,6 +529,12 @@ include = ["qasync*"]
             # Activate the uv2nix virtual environment (managed by Nix)
             export PATH="${virtualenv}/bin:$PATH"
             
+            # Ensure virtualenv site-packages (uv2nix resolved deps like ndscan) are first on PYTHONPATH
+            for sp in "${virtualenv}/lib"/python*/site-packages; do
+              if [ -d "$sp" ]; then
+                export PYTHONPATH="$sp:$PYTHONPATH"
+              fi
+            done
             
             # Add ARTIQ packages to PYTHONPATH so they're available alongside uv2nix packages
             export PYTHONPATH="${editablePythonSet.artiq}/${python.sitePackages}:$PYTHONPATH"
@@ -527,6 +543,21 @@ include = ["qasync*"]
             export PYTHONPATH="${editablePythonSet.asyncserial}/${python.sitePackages}:$PYTHONPATH"
             export PYTHONPATH="${editablePythonSet.microscope}/${python.sitePackages}:$PYTHONPATH"
             export PYTHONPATH="${editablePythonSet.sipyco}/${python.sitePackages}:$PYTHONPATH"
+            # Ensure llvmlite (from nixpkgs) is on PYTHONPATH for ARTIQ JIT components
+            if [ -d "${python.pkgs.llvmlite}/${python.sitePackages}" ]; then
+              export PYTHONPATH="${python.pkgs.llvmlite}/${python.sitePackages}:$PYTHONPATH"
+            fi
+            # Dynamically add pythonparser (needed by ARTIQ core compiler) if present in ARTIQ store closure
+            if command -v artiq_run >/dev/null 2>&1; then
+              _ARTIQ_BIN=$(command -v artiq_run)
+              _ARTIQ_ROOT=$(dirname $(dirname "$_ARTIQ_BIN"))
+              for sp in "$_ARTIQ_ROOT"/lib/python*/site-packages; do
+                if [ -d "$sp/pythonparser" ]; then
+                  export PYTHONPATH="$sp:$PYTHONPATH"
+                  break
+                fi
+              done
+            fi
             
             # Provide wheel runtime libs for PyQt6/qasync
             ZSTD_LIB="${pkgs.zstd.out or pkgs.zstd}/lib"
@@ -596,8 +627,89 @@ include = ["qasync*"]
               GPU_TYPE="CPU-only (nixGL unavailable)"
             ''}
             
-            # Add ARTIQ executables to PATH
+            # Add ARTIQ store executables first
             export PATH="${editablePythonSet.artiq}/bin:$PATH"
+
+            # Create wrapper scripts ensuring ARTIQ frontends execute with the dev virtualenv python
+            DEV_BIN="$REPO_ROOT/.dev-bin"
+            mkdir -p "$DEV_BIN"
+            FRONTENDS="artiq_run artiq_master artiq_dashboard artiq_client artiq_controller artiq_rpctool"
+            for fe in $FRONTENDS; do
+              case "$fe" in
+                artiq_run)        mod="artiq.frontend.artiq_run" ;;
+                artiq_master)     mod="artiq.frontend.artiq_master" ;;
+                artiq_dashboard)  mod="artiq.frontend.artiq_dashboard" ;;
+                artiq_client)     mod="artiq.frontend.artiq_client" ;;
+                artiq_controller) mod="artiq.frontend.artiq_controller" ;;
+                artiq_rpctool)    mod="artiq.frontend.artiq_rpctool" ;;
+                *) mod="artiq.frontend.$fe" ;;
+              esac
+              wrapper="$DEV_BIN/$fe"
+              # Regenerate if missing or pointing to older virtualenv
+              if [ ! -f "$wrapper" ] || ! grep -q "${virtualenv}" "$wrapper"; then
+                cat > "$wrapper" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ -n "$NIXGL_BIN" ]; then
+  exec "$NIXGL_BIN" VENV_PY_PLACEHOLDER -m MOD_PLACEHOLDER "$@"
+else
+  exec VENV_PY_PLACEHOLDER -m MOD_PLACEHOLDER "$@"
+fi
+EOF
+                # Substitute placeholders (avoid variable expansion issues in heredoc)
+                sed -i "s|MOD_PLACEHOLDER|$mod|g" "$wrapper"
+                sed -i "s|VENV_PY_PLACEHOLDER|${virtualenv}/bin/python|g" "$wrapper"
+                chmod +x "$wrapper"
+              fi
+            done
+            # Prepend wrapper directory so it overrides store binaries
+            export PATH="$DEV_BIN:$PATH"
+
+            # Optional detailed GPU/CUDA probe (disable with CUDA_PROBE=0)
+            if [ "''${CUDA_PROBE:-1}" = "1" ]; then
+              echo "[GPU Probe] Starting CUDA/Torch diagnostics..."
+              # Basic NVIDIA presence info
+              if command -v nvidia-smi >/dev/null 2>&1; then
+                echo "[GPU Probe] nvidia-smi detected; summary:"
+                nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader 2>/dev/null | sed 's/^/[GPU]/'
+              else
+                echo "[GPU Probe] nvidia-smi not found (driver or PATH missing)"
+              fi
+              if [ -e /proc/driver/nvidia/version ]; then
+                echo "[GPU Probe] /proc/driver/nvidia/version: $(head -n1 /proc/driver/nvidia/version)"
+              fi
+              # Torch probe
+              python <<'PY' 2>/dev/null || true
+import os, ctypes, json, textwrap
+report = {}
+try:
+    import torch
+    report['torch_version'] = torch.__version__
+    report['compiled_cuda'] = getattr(torch.version, 'cuda', None)
+    avail = torch.cuda.is_available()
+    report['cuda_available'] = avail
+    if avail:
+        report['device_count'] = torch.cuda.device_count()
+        names = []
+        for i in range(torch.cuda.device_count()):
+            try:
+                names.append(torch.cuda.get_device_name(i))
+            except Exception as e: # still list placeholder
+                names.append(f"<error:{e}>")
+        report['device_names'] = names
+    else:
+        # Attempt to load libcuda to distinguish missing driver vs torch mismatch
+        try:
+            ctypes.CDLL('libcuda.so.1')
+            report['libcuda'] = 'found (Torch still reports unavailable)'
+        except OSError as e:
+            report['libcuda'] = f'missing ({e})'
+except Exception as e:
+    report['torch_error'] = str(e)
+print('[GPU Probe] Torch summary:', json.dumps(report))
+PY
+              echo "[GPU Probe] Done"
+            fi
             
             echo "ARTIQ Fork development environment with uv2nix (uv.lock detected)"
             echo "Using Nix-managed virtual environment at: ${virtualenv}"

@@ -1,0 +1,14 @@
+{
+  "include": [
+    "scripts",
+    "vendored/ndscan",
+    "vendored/oitg"
+  ],
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "executionEnvironments": [
+    {
+      "root": "./scripts"
+    }
+  ]
+}
