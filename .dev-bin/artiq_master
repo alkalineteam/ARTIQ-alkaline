@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if [ -n "$NIXGL_BIN" ]; then
+  exec "$NIXGL_BIN" /nix/store/kimlcjsd42pzhpkrdiw224fnzrr1l991-artiq-fork-dev-env/bin/python -m artiq.frontend.artiq_master "$@"
+else
+  exec /nix/store/kimlcjsd42pzhpkrdiw224fnzrr1l991-artiq-fork-dev-env/bin/python -m artiq.frontend.artiq_master "$@"
+fi
