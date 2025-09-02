@@ -12,3 +12,4 @@ artiq_kasli
 *.mdb
 *.mdb-lock
 flash
+results
