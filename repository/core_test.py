@@ -1,5 +1,5 @@
 import torch
-from artiq.experiment import *
+from artiq.experiment import EnvExperiment, host_only
 from ndscan.experiment import Fragment
 from numpy import int64, int64
 

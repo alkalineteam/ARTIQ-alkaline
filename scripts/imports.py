@@ -28,4 +28,4 @@ print(torch.cuda.device_count())
 if torch.cuda.is_available() and torch.cuda.device_count() > 0:
     print(torch.cuda.get_device_name(0))
 else:
-    print("[CUDA] No GPU detected (torch.cuda.is_available() is False or device_count == 0); skipping device name query.")
+    print("No CUDA enabled GPU detected (torch.cuda.is_available() is False or device_count == 0)")
