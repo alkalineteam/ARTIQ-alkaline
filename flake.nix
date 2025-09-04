@@ -650,8 +650,20 @@ include = ["qasync*"]
                 cat > "$wrapper" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-if [ -n "$NIXGL_BIN" ]; then
-  exec "$NIXGL_BIN" VENV_PY_PLACEHOLDER -m MOD_PLACEHOLDER "$@"
+
+# Auto-detect nixGL wrapper if not already exported and available.
+if [ -z "''${NIXGL_BIN:-}" ]; then
+  if command -v nixGL >/dev/null 2>&1; then
+    NIXGL_BIN=$(command -v nixGL)
+  elif command -v nixGLNvidia >/dev/null 2>&1; then
+    NIXGL_BIN=$(command -v nixGLNvidia)
+  elif command -v nixGLIntel >/dev/null 2>&1; then
+    NIXGL_BIN=$(command -v nixGLIntel)
+  fi
+fi
+
+if [ -n "''${NIXGL_BIN:-}" ]; then
+  exec "''${NIXGL_BIN}" VENV_PY_PLACEHOLDER -m MOD_PLACEHOLDER "$@"
 else
   exec VENV_PY_PLACEHOLDER -m MOD_PLACEHOLDER "$@"
 fi
