@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from artiq.experiment import EnvExperiment, rpc
 
 
-class TestCore(EnvExperiment):
+class ffnn(EnvExperiment):
 	def build(self):
 		self.setattr_device("core")
 
@@ -26,17 +26,30 @@ class TestCore(EnvExperiment):
             criterion = nn.CrossEntropyLoss()
             optimizer = optim.Adam(model.parameters(), lr=0.01)
 
-            # Dummy data: 100 samples with 10 features
-            X = torch.randn(100, input_size)
-            y = torch.randint(0, output_size, (100,))
+            # Dummy training data: 100 samples
+            X_train = torch.randn(100, input_size)
+            y_train = torch.randint(0, output_size, (100,))
 
-            # Training loop
+            # Train the model
             for epoch in range(50):
                 optimizer.zero_grad()
-                outputs = model(X)
-                loss = criterion(outputs, y)
+                outputs = model(X_train)
+                loss = criterion(outputs, y_train)
                 loss.backward()
                 optimizer.step()
-                
+
                 if (epoch + 1) % 10 == 0:
                     print(f"Epoch [{epoch+1}/50], Loss: {loss.item():.4f}")
+
+            # ---------------------------
+            # Evaluation on random test data
+            # ---------------------------
+            X_test = torch.randn(20, input_size)             # 20 test samples
+            y_test = torch.randint(0, output_size, (20,))    # random labels
+
+            with torch.no_grad():  # no gradient calculation needed
+                predictions = model(X_test)
+                predicted_classes = predictions.argmax(dim=1)
+
+            accuracy = (predicted_classes == y_test).float().mean()
+            print(f"Accuracy on random test set: {accuracy.item()*100:.2f}%")
