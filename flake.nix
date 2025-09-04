@@ -487,6 +487,7 @@ include = ["qasync*"]
             # Include essential ARTIQ development tools
             pkgs.git
             pkgs.jq
+            pkgs.fd
             pkgs.llvm_15
             pkgs.lld_15
             pkgs.llvmPackages_15.clang-unwrapped
@@ -762,10 +763,14 @@ PY
             # before entering the shell. Re-run shell to refresh after rebuilds.
             # ------------------------------------------------------------------
             if [ "''${VSCODE_AUTO_PY:-1}" = "1" ]; then
+              echo "[VSCode] Automation enabled (VSCODE_AUTO_PY=1)" >&2
               vscode_dir="$REPO_ROOT/.vscode"
               settings_file="$vscode_dir/settings.json"
               mkdir -p "$vscode_dir"
               mode="''${VSCODE_INTERPRETER_MODE:-pin}"  # modes: pin (default), auto (clear), off
+              if [ ! -w "$vscode_dir" ]; then
+                echo "[VSCode] Directory not writable: $vscode_dir (skipping)" >&2
+              fi
               current_real_interp="${virtualenv}/bin/python"
               settings_interp="$REPO_ROOT/.venv/bin/python"
               # Ensure stable .venv symlink exists
@@ -797,6 +802,7 @@ EOF_JSON
                       rm -f "$tmpfile"
                     fi
                   else
+                    echo "[VSCode] Creating new pinned settings file" >&2
                     cat > "$settings_file" <<EOF_JSON
 {
   "python.defaultInterpreterPath": "$settings_interp",
@@ -833,6 +839,11 @@ EOF_JSON
                   fi
                   ;;
               esac
+              if [ -f "$settings_file" ]; then
+                echo "[VSCode] Final settings.json size: $(wc -c < "$settings_file" 2>/dev/null) bytes" >&2
+              else
+                echo "[VSCode] Warning: settings.json was not created" >&2
+              fi
             fi
           '';
         }
