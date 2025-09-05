@@ -9,25 +9,22 @@ class ffnn(EnvExperiment):
         self.setattr_device("core")
 
     @rpc
-    def train_model(self):
-        input_size = 10      # number of input features
-        hidden_size = 16
-        output_size = 2      # number of classes
+    def model(self):
+        self.input_size = 10      # number of input features
+        self.hidden_size = 16
+        self.output_size = 2      # number of classes
 
         model = nn.Sequential(
-            nn.Linear(input_size, hidden_size),
+            nn.Linear(self.input_size, self.hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, output_size)
+            nn.Linear(self.hidden_size, self.output_size)
         )
-
-        model.input_size = input_size
-        model.output_size = output_size
 
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(model.parameters(), lr=0.01)
 
-        X_train = torch.randn(100, input_size)
-        y_train = torch.randint(0, output_size, (100,))
+        X_train = torch.randn(100, self.input_size)
+        y_train = torch.randint(0, self.output_size, (100,))
 
         for epoch in range(50):
             optimizer.zero_grad()
@@ -42,9 +39,9 @@ class ffnn(EnvExperiment):
     
     @kernel
     def run(self):
-        model = self.train_model()
-        X_test = torch.randn(20, model.input_size)
-        y_test = torch.randint(0, model.output_size, (20,))
+        model = self.model()
+        X_test = torch.randn(20, self.input_size)
+        y_test = torch.randint(0, self.output_size, (20,))
 
         with torch.no_grad():
             predictions = model(X_test)
