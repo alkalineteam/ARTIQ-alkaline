@@ -7,6 +7,7 @@
     # ARTIQ
     artiq = {
       url = "github:alkalineteam/ARTIQ-alkaline-fork/master";
+      # url = "github:m-labs/artiq/master";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -488,6 +489,8 @@ include = ["qasync*"]
             pkgs.git
             pkgs.jq
             pkgs.fd
+            pkgs.rustc
+            pkgs.cargo
             pkgs.llvm_15
             pkgs.lld_15
             pkgs.llvmPackages_15.clang-unwrapped
