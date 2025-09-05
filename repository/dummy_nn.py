@@ -10,7 +10,6 @@ class ffnn(EnvExperiment):
 
     @rpc
     def train_model(self):
-        """Train a tiny feed-forward network on random data and return it."""
         input_size = 10      # number of input features
         hidden_size = 16
         output_size = 2      # number of classes
@@ -21,9 +20,8 @@ class ffnn(EnvExperiment):
             nn.Linear(hidden_size, output_size)
         )
 
-        # Attach metadata for later use
-        model.input_size = input_size  # type: ignore[attr-defined]
-        model.output_size = output_size  # type: ignore[attr-defined]
+        model.input_size = input_size
+        model.output_size = output_size
 
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(model.parameters(), lr=0.01)
@@ -43,7 +41,7 @@ class ffnn(EnvExperiment):
         return model
     
     @kernel
-    def run(self):  # host-side; not a kernel because it uses PyTorch
+    def run(self):
         model = self.train_model()
         X_test = torch.randn(20, model.input_size)
         y_test = torch.randint(0, model.output_size, (20,))
@@ -53,5 +51,4 @@ class ffnn(EnvExperiment):
             predicted_classes = predictions.argmax(dim=1)
 
         accuracy = (predicted_classes == y_test).float().mean()
-        # print(f"Accuracy on random test set: {accuracy.item()*100:.2f}%")
         print(accuracy)
