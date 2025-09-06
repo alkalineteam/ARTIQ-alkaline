@@ -23,8 +23,9 @@ class ffnn(EnvExperiment):
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(model.parameters(), lr=0.01)
 
-        X_train = torch.randn(100, self.input_size)
-        y_train = torch.randint(0, self.output_size, (100,))
+        # Increased data size by 100x
+        X_train = torch.randn(10_000, self.input_size)
+        y_train = torch.randint(0, self.output_size, (10_000,))
 
         for epoch in range(50):
             optimizer.zero_grad()
@@ -37,11 +38,12 @@ class ffnn(EnvExperiment):
 
         return model
     
-    @kernel
+    @rpc
     def run(self):
         model = self.model()
-        X_test = torch.randn(20, self.input_size)
-        y_test = torch.randint(0, self.output_size, (20,))
+        # Increased test set size by 100x
+        X_test = torch.randn(2_000, self.input_size)
+        y_test = torch.randint(0, self.output_size, (2_000,))
 
         with torch.no_grad():
             predictions = model(X_test)
