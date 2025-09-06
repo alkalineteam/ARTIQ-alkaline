@@ -575,6 +575,12 @@ include = ["qasync*"]
               export LIBGL_DRIVERS_PATH="${pkgs.mesa}/lib/dri"
             fi
 
+            # WSL: expose host CUDA shim to nix-built programs
+            if [ -e /usr/lib/wsl/lib/libcuda.so.1 ]; then
+              export LD_LIBRARY_PATH="/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
+              export WSL_CUDA=1
+            fi
+
             # Ensure QML2_IMPORT_PATH points to an existing directory; probe common qt6 locations if unset/invalid
             # Build QML2_IMPORT_PATH from all existing candidate directories (first element previously set may not exist)
             CANDIDATE_QML_DIRS="${pkgs.qt6.qtdeclarative}/lib/qt6/qml ${pkgs.qt6.qtdeclarative}/lib/qt-6/qml ${pkgs.qt6.qtdeclarative}/share/qt6/qml ${pkgs.qt6.qtdeclarative}/share/qt/qml ${pkgs.qt6.qtbase}/lib/qt6/qml ${pkgs.qt6.qtbase}/lib/qt-6/qml ${pkgs.qt6.qtbase}/share/qt6/qml ${pkgs.qt6.qtbase}/share/qt/qml"
