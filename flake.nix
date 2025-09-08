@@ -689,62 +689,29 @@ EOF
             export PATH="$DEV_BIN:$PATH"
 
             # Optional detailed GPU/CUDA probe (disable with CUDA_PROBE=0)
+            echo ""
             if [ "''${CUDA_PROBE:-1}" = "1" ]; then
-              echo "[GPU Probe] Starting CUDA/Torch diagnostics..."
-              # Basic NVIDIA presence info
+              # NVIDIA GPU info
               if command -v nvidia-smi >/dev/null 2>&1; then
-                echo "[GPU Probe] nvidia-smi detected; summary:"
                 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader 2>/dev/null | sed 's/^/[GPU]/'
               else
-                echo "[GPU Probe] nvidia-smi not found (driver or PATH missing)"
+                echo "nvidia driver not found" # nvidia-smi not available
               fi
               if [ -e /proc/driver/nvidia/version ]; then
-                echo "[GPU Probe] /proc/driver/nvidia/version: $(head -n1 /proc/driver/nvidia/version)"
+                echo "$(head -n1 /proc/driver/nvidia/version)"
               fi
-              # Torch probe
-              python <<'PY' 2>/dev/null || true
-import os, ctypes, json, textwrap
-report = {}
-try:
-    import torch
-    report['torch_version'] = torch.__version__
-    report['compiled_cuda'] = getattr(torch.version, 'cuda', None)
-    avail = torch.cuda.is_available()
-    report['cuda_available'] = avail
-    if avail:
-        report['device_count'] = torch.cuda.device_count()
-        names = []
-        for i in range(torch.cuda.device_count()):
-            try:
-                names.append(torch.cuda.get_device_name(i))
-            except Exception as e: # still list placeholder
-                names.append(f"<error:{e}>")
-        report['device_names'] = names
-    else:
-        # Attempt to load libcuda to distinguish missing driver vs torch mismatch
-        try:
-            ctypes.CDLL('libcuda.so.1')
-            report['libcuda'] = 'found (Torch still reports unavailable)'
-        except OSError as e:
-            report['libcuda'] = f'missing ({e})'
-except Exception as e:
-    report['torch_error'] = str(e)
-print('[GPU Probe] Torch summary:', json.dumps(report))
-PY
-              echo "[GPU Probe] Done"
+              if [ -n "$NIXGL_BIN" ]; then
+                echo "GPU acceleration available"
+              else
+                echo "CPU acceleration available"
+                # (build-time GPU absence note suppressed to avoid Nix interpolation complexity)
+              fi
             fi
             
-            echo "ARTIQ Fork development environment with uv2nix (uv.lock detected)"
-            echo "Using Nix-managed virtual environment at: ${virtualenv}"
-            echo "Python: $(which python)"
-            echo "ARTIQ: $(artiq_master --version 2>/dev/null || echo 'available')"
-            echo "✅ PyTorch dev shell with nixGL ($GPU_TYPE) is ready!"
-            if [ -n "$NIXGL_BIN" ]; then
-              echo "💡 python3 and jupyter use GPU acceleration automatically"
-            else
-              echo "💡 Running in CPU-only mode"
-              # (build-time GPU absence note suppressed to avoid Nix interpolation complexity)
-            fi
+            echo ""
+            echo "Nix environment: ${virtualenv}"
+            echo "Python: $(which python3)"
+            echo "$(artiq_master --version 2>/dev/null || echo 'available')"
       # Optional OpenGL probe (set OPENGL_PROBE=1 before entering shell to enable)
             if [ "''${OPENGL_PROBE:-0}" = "1" ]; then
         python - <<'PY' 2>/dev/null || true
@@ -759,12 +726,6 @@ PY
             if [ -z "$(ls ${pkgs.libglvnd}/lib/libGL.so.1 2>/dev/null)" ]; then
               echo "(diagnostic) libGL.so.1 not present in libglvnd store path: ${pkgs.libglvnd}/lib" >&2
             fi
-            echo ""
-            echo "To add packages:"
-            echo "  uv-add <package>    - Add package and rebuild"
-            echo "  uv-remove <package> - Remove package and rebuild"
-
-            # (VS Code interpreter automation removed by request)
           '';
         }
       else
