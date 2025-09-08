@@ -1,5 +1,5 @@
 {
-  description = "ARTIQ Fork for alkaline team @ University of Birmingham";
+  description = "ARTIQ for alkaline team @ University of Birmingham";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -489,8 +489,8 @@ include = ["qasync*"]
             pkgs.git
             pkgs.jq
             pkgs.fd
-            pkgs.rustc
-            pkgs.cargo
+            # pkgs.rustc
+            # pkgs.cargo
             pkgs.llvm_15
             pkgs.lld_15
             pkgs.llvmPackages_15.clang-unwrapped
