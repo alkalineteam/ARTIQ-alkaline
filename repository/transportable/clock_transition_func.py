@@ -1,7 +1,7 @@
 from artiq.experiment import *
 from artiq.coredevice.ttl import TTLOut
 from artiq.language.core import delay
-# from artiq.test.lit.iodelay import sequential
+from artiq.test.lit.iodelay import sequential
 from artiq.coredevice.sampler import Sampler
 from artiq.language.units import *
 from numpy import int64, int32
@@ -32,20 +32,41 @@ class clock_transition_lookup_v4(EnvExperiment):
         self.ttl:TTLOut=self.get_device("ttl15")
 
         self.setattr_argument("Loading_Time", NumberValue(default=1500))
-        self.setattr_argument("Transfer_Time", NumberValue(default=40))
-        self.setattr_argument("Holding_Time", NumberValue(default=40))
+        self.setattr_argument("Transfer_Time", NumberValue(default=80))
+        self.setattr_argument("Holding_Time", NumberValue(default=80))
         self.setattr_argument("Compression_Time", NumberValue(default=8))
-        self.setattr_argument("Single_Freq_Time", NumberValue(default=40))
+        self.setattr_argument("Single_Freq_Time", NumberValue(default=80))
         self.setattr_argument("State_Preparation_Time", NumberValue(default=30))
         self.setattr_argument("Clock_Interrogation_Time", NumberValue(default=300))
 
-        self.setattr_argument("Center_Frequency", NumberValue(unit="MHz", default=79.96e6, precision=4))
+        self.setattr_argument("Center_Frequency", NumberValue(unit="MHz", default=79.95e6, precision=4))
         self.setattr_argument("Scan_Range", NumberValue(unit="kHz", default=100e3, precision=4))
         self.setattr_argument("Step_Size", NumberValue(unit="Hz", default=500, precision=4))
         
         self.setattr_argument("sampling_rate", NumberValue(unit="kHz", default=50000))
 
+        # Initialize class attributes that will be used across methods
+        self.voltage_1 = 0.0
+        self.voltage_2 = 0.0
+        self.voltage_1_Tr = 0.0
+        self.voltage_2_Tr = 0.0
+        self.amp_com = 0.0
+
+        # Clock params
+        self.cycles = int32(self.Scan_Range/self.Step_Size)
+        self.start = self.Center_Frequency - self.Scan_Range/2
+
+        # Sampler params
+        sample_duration = 0.05  # 50 ms: detection cycle duration ~ 54 ms
+        self.sampling_period = 1/self.sampling_rate
+        self.num_samples = int32(sample_duration / self.sampling_period)
         
+        # Pre-allocate arrays
+        self.samples = [[0.0 for i in range(8)] for i in range(self.num_samples)]
+        self.detection_data = [0.0 for i in range(self.num_samples)]
+        self.detection_x = [i for i in range(self.num_samples)]
+        self.excitation_fraction_list = [0.0 for i in range(self.cycles+1)]
+        self.frequencies_MHz = [(self.Center_Frequency - self.Scan_Range/2 + i*self.Step_Size)*1e-6 for i in range(self.cycles+1)]
 
     @kernel
     def initialise(self):
@@ -88,57 +109,18 @@ class clock_transition_lookup_v4(EnvExperiment):
         self.Ref.set(frequency=80 * MHz)
         self.Ref.set_att(0.0)
 
-        # Initialize the modules
-        self.Pixelfly.output()
-        self.Camera.output()
-        self.BMOT_TTL.output()
-        self.Probe_TTL.output()
-        self.Zeeman_Slower_TTL.output()
-        self.Repump707.output()
-        self.MOT_Coil_1.init()
-        self.MOT_Coil_2.init()
-        self.BMOT_AOM.cpld.init()
-        self.BMOT_AOM.init()
-        self.ZeemanSlower.cpld.init()
-        self.ZeemanSlower.init()
-        self.Probe.cpld.init()
-        self.Probe.init()
-        self.Single_Freq.cpld.init()
-        self.Single_Freq.init()
-        self.Clock.cpld.init()
-        self.Clock.init()
-
-        self.Ref.cpld.init()
-        self.Ref.init()
-
-        # Set the RF channels ON
-        self.BMOT_AOM.sw.on()
-        self.ZeemanSlower.sw.on()
-        self.Probe.sw.on()
-
-        # Set the RF attenuation
-        self.BMOT_AOM.set_att(0.0)
-        self.ZeemanSlower.set_att(0.0)
-        self.Probe.set_att(0.0)
-        self.Single_Freq.set_att(0.0)
-        self.Clock.set_att(0.0)
-
-        self.Ref.set(frequency=80 * MHz)
-        self.Ref.set_att(0.0)
-
     @kernel
-    def blue_mot(self):
+    def blue_mot(self, coil_1_voltage, coil_2_voltage):
         # **************************** Blue MOT Loading ****************************
         self.BMOT_AOM.set(frequency=90*MHz, amplitude=0.08)
         self.ZeemanSlower.set(frequency=180*MHz, amplitude=0.35)
         self.Probe.set(frequency=65*MHz, amplitude=0.02)
         self.Single_Freq.set(frequency=80*MHz, amplitude=0.35)
 
-        global voltage_1, voltage_2
-        voltage_1 = 1.02
-        voltage_2 = 0.45
-        self.MOT_Coil_1.write_dac(0, voltage_1)
-        self.MOT_Coil_2.write_dac(1, voltage_2)
+        self.voltage_1 = coil_1_voltage
+        self.voltage_2 = coil_2_voltage
+        self.MOT_Coil_1.write_dac(0, self.voltage_1)
+        self.MOT_Coil_2.write_dac(1, self.voltage_2)
 
         with parallel:
             self.MOT_Coil_1.load()
@@ -181,11 +163,10 @@ class clock_transition_lookup_v4(EnvExperiment):
     @kernel
     def broadband_red_mot(self):
         # **************************** Broadband Red MOT ****************************
-        global voltage_1_Tr, voltage_2_Tr
-        voltage_1_Tr = 4.903
-        voltage_2_Tr = 4.027
-        self.MOT_Coil_1.write_dac(0, voltage_1_Tr)
-        self.MOT_Coil_2.write_dac(1, voltage_2_Tr)
+        self.voltage_1_Tr = 4.903
+        self.voltage_2_Tr = 4.027
+        self.MOT_Coil_1.write_dac(0, self.voltage_1_Tr)
+        self.MOT_Coil_2.write_dac(1, self.voltage_2_Tr)
         with parallel:
             self.MOT_Coil_1.load()
             self.MOT_Coil_2.load()
@@ -202,21 +183,21 @@ class clock_transition_lookup_v4(EnvExperiment):
         voltage_1_com = 2.51
         voltage_2_com = 2.23
         red_amp = 0.35
-        global amp_com
-        amp_com = 0.03
+        self.amp_com = 0.03
         red_freq = 80.0
         red_freq_com = 80.3
         steps_com = self.Compression_Time
         t_com = self.Compression_Time/steps_com
-        volt_1_steps = (voltage_1_Tr - voltage_1_com)/steps_com
-        volt_2_steps = (voltage_2_Tr - voltage_2_com)/steps_com
-        amp_steps = (red_amp-amp_com)/steps_com
+        # Fixed: Use self.voltage_1_Tr and self.voltage_2_Tr
+        volt_1_steps = (self.voltage_1_Tr - voltage_1_com)/steps_com
+        volt_2_steps = (self.voltage_2_Tr - voltage_2_com)/steps_com
+        amp_steps = (red_amp-self.amp_com)/steps_com
         freq_steps = (red_freq_com - red_freq)/steps_com
 
         with parallel:
             for i in range(int64(steps_com)):
-                voltage_1 = voltage_1_Tr - volt_1_steps
-                voltage_2 = voltage_2_Tr - volt_2_steps
+                voltage_1 = self.voltage_1_Tr - volt_1_steps
+                voltage_2 = self.voltage_2_Tr - volt_2_steps
                 self.MOT_Coil_1.write_dac(0, voltage_1)
                 self.MOT_Coil_2.write_dac(1, voltage_2)
                 with parallel:
@@ -233,15 +214,15 @@ class clock_transition_lookup_v4(EnvExperiment):
     @kernel
     def single_frequency_red_mot(self):
         # **************************** Single Frequency Red MOT****************************
-        self.Single_Freq.set(frequency=80.3*MHz, amplitude=amp_com)
+        self.Single_Freq.set(frequency=80.3*MHz, amplitude=self.amp_com)
         delay(self.Single_Freq_Time*ms)
         self.Single_Freq.sw.off()
 
     @kernel
-    def state_preparation(self):
+    def state_preparation(self, coil_1_voltage, coil_2_voltage):
         # **************************** State Preparation *****************************
-        self.MOT_Coil_1.write_dac(0, 7.06) # 5.62/2.24 = 1.80; 7.03/0.45 = 3.5; 4.903/3.1 = 1;
-        self.MOT_Coil_2.write_dac(1, 0.45)
+        self.MOT_Coil_1.write_dac(0, coil_1_voltage)
+        self.MOT_Coil_2.write_dac(1, coil_2_voltage)
         with parallel:
             self.MOT_Coil_1.load()
             self.MOT_Coil_2.load()
@@ -249,117 +230,112 @@ class clock_transition_lookup_v4(EnvExperiment):
         delay(self.State_Preparation_Time*ms)
 
     @kernel
-    def clock_interrogation(self):
+    def clock_interrogation(self, j):
         # **************************** Clock Interrogation *****************************
         self.Clock.sw.on()
-        self.Clock.set(frequency=start)
-        print("Clock Frequency:", start*1e-6, "MHz")
-        start += self.Step_Size
+        self.Clock.set(frequency=self.start)
+        print("Clock Frequency:", self.start*1e-6, "MHz, Cycle:", j)
+        self.start += self.Step_Size
         delay(self.Clock_Interrogation_Time*ms)
         self.Clock.sw.off()
     
     @kernel
     def detection(self):
         # **************************** Detection *****************************
-            # Turn off MOT coils for detection
-            self.MOT_Coil_1.write_dac(0, 4.08)
-            self.MOT_Coil_2.write_dac(1, 4.11)
-            with parallel:
-                self.MOT_Coil_1.load()
-                self.MOT_Coil_2.load()
+        # Turn off MOT coils for detection
+        self.MOT_Coil_1.write_dac(0, 4.08)
+        self.MOT_Coil_2.write_dac(1, 4.11)
+        with parallel:
+            self.MOT_Coil_1.load()
+            self.MOT_Coil_2.load()
 
-            with parallel:
-                with sequential:
-                    # **************************** Ground State ****************************
-                    self.Probe_TTL.on()
-                    delay(2.8*ms)
+        with parallel:
+            with sequential:
+                # **************************** Ground State ****************************
+                self.Probe_TTL.on()
+                delay(2.8*ms)
 
-                    with parallel:
-                        self.Camera.on()
-                        self.Probe.set(frequency=65*MHz, amplitude=0.02)
-                        self.Ref.sw.on()
-
-                    delay(0.5*ms)
-
-                    with parallel:
-                        self.Camera.off()
-                        self.Ref.sw.off()
-                        self.Probe_TTL.off()
-                        self.Probe.set(frequency=65*MHz, amplitude=0.00)
-                    delay(5*ms)
-
-                    # **************************** Repumping ****************************
-                    with parallel:
-                        self.Repump707.pulse(15*ms)
-                        self.Repump679.pulse(15*ms)
-
+                with parallel:
+                    self.Camera.on()
                     self.Probe.set(frequency=65*MHz, amplitude=0.02)
-                    delay(10*ms)
+
+                delay(0.5*ms)
+
+                with parallel:
+                    self.Camera.off()
+                    self.Probe_TTL.off()
+                    self.Probe.set(frequency=65*MHz, amplitude=0.00)
+                delay(5*ms)
+
+                # **************************** Repumping ****************************
+                with parallel:
+                    self.Repump707.pulse(15*ms)
+                    self.Repump679.pulse(15*ms)
+
+                self.Probe.set(frequency=65*MHz, amplitude=0.02)
+                delay(10*ms)
+                self.Probe.set(frequency=65*MHz, amplitude=0.00)
+
+                # **************************** Excited State ****************************
+                self.Probe_TTL.on()
+                delay(2.8*ms)
+
+                self.Probe.set(frequency=65*MHz, amplitude=0.02)
+                
+                delay(0.5*ms)
+                
+                with parallel:
+                    self.Probe_TTL.off()
+                    self.Probe.set(frequency=65*MHz, amplitude=0.00)
+                delay(5*ms)
+
+                self.Probe.set(frequency=65*MHz, amplitude=0.02)
+                delay(10*ms)
+                self.Probe.set(frequency=65*MHz, amplitude=0.00)
+
+                # **************************** Background ****************************
+                self.Probe_TTL.on()
+                delay(2.8*ms)
+
+                self.Probe.set(frequency=65*MHz, amplitude=0.02)
+                delay(0.5*ms)
+                with parallel:
+                    self.Probe_TTL.off()
                     self.Probe.set(frequency=65*MHz, amplitude=0.00)
 
-                    # **************************** Excited State ****************************
-                    self.Probe_TTL.on()
-                    delay(2.8*ms)
-
-                    with parallel:
-                        self.Ref.sw.on()
-                        self.Probe.set(frequency=65*MHz, amplitude=0.02)
-                    
-                    delay(0.5*ms)
-                    
-                    with parallel:
-                        self.Ref.sw.off()
-                        self.Probe_TTL.off()
-                        self.Probe.set(frequency=65*MHz, amplitude=0.00)
-                    delay(5*ms)
-
-                    self.Probe.set(frequency=65*MHz, amplitude=0.02)
-                    delay(10*ms)
-                    self.Probe.set(frequency=65*MHz, amplitude=0.00)
-
-                    # **************************** Background ****************************
-                    self.Probe_TTL.on()
-                    delay(2.8*ms)
-
-                    self.Probe.set(frequency=65*MHz, amplitude=0.02)
-                    delay(0.5*ms)
-                    self.Probe.set(frequency=65*MHz, amplitude=0.00)
-
-                with sequential:
-                    for j in range(num_samples):
-                        self.sampler.sample(samples[j])
-                        delay(sampling_period * s)
-                        
-            self.Probe_TTL.off()
-
-    @kernel
-    def detection_plot(self):
-        global detection
-        detection = [x[0] for x in samples]
-        self.set_dataset("excitation.samples", detection, broadcast=True, archive=True)
-        self.set_dataset("excitation.samples_x", [x for x in range(len(detection))], broadcast=True, archive=True)
-
-        self.ccb.issue("create_applet", 
-                        "Excitation Plot", 
-                        "${artiq_applet}plot_xy"
-                        " excitation.samples"
-                        " --x excitation.samples_x"
-                        " --title Excitation", 
-                        group = "excitation"
-                    )
-        
+            with sequential:
+                for j in range(self.num_samples):
+                    self.sampler.sample(self.samples[j])
+                    delay(self.sampling_period * s)
+   
     @rpc
-    def excitation_fraction_list(self):
-        ground = np.array(detection[0:250])
-        excited = np.array(detection[1200:1400])
-        background = np.array(detection[1700:2000])
-        ground_avg = ground[ground > 0.8].mean()
-        excited_avg = excited[excited > 0.8].mean()
-        background_avg = background[background > 0.8].mean()
+    def excitation_fraction(self, detection_data, j) -> float:
+        ground = np.array(detection_data[0:200])
+        excited = np.array(detection_data[1200:1400])
+        background = np.array(detection_data[1800:2000])
+        baseline = np.array(detection_data[200:1200])
 
-        print(ground_avg, excited_avg, background_avg)
+        ground_mean = ground.mean()
+        excited_mean = excited.mean()
+        background_mean = background.mean()
+        baseline_mean = baseline.mean()
 
-        return (ground_avg, excited_avg, background_avg)
+        ground_state = ground_mean - baseline_mean
+        excited_state = excited_mean - baseline_mean
+        background_state = background_mean - baseline_mean
+
+        # Once you have fixed PMT allignment, you don't need baseline mean as you can directly ignore the noise floor and set a threshold
+        numerator = excited_state
+        denominator = excited_state + ground_state - 2*background_state
+
+        if denominator != 0.0:
+            excitation_fraction = numerator / denominator
+            if excitation_fraction < 0.0 or excitation_fraction > 1.0:
+                excitation_fraction = 0.0
+        else:
+            excitation_fraction = 0.0
+        print("Excitation Fraction:", excitation_fraction, ", Cycle:", j)
+        return excitation_fraction
 
     @kernel
     def run(self):
@@ -367,29 +343,49 @@ class clock_transition_lookup_v4(EnvExperiment):
         self.core.break_realtime()
         self.initialise()
 
-        # Clock params
-        global cycles, start
-        cycles = int32(self.Scan_Range/self.Step_Size)
-        start = self.Center_Frequency - self.Scan_Range/2
-
-        # Sampler params
-        global num_samples, sampling_period, samples
-        sample_duration = 0.06  # 60 ms: detection cycle duration ~ 54 ms
-        sampling_period = 1/self.sampling_rate
-        num_samples = int32(sample_duration / sampling_period)
-        samples = [[0.0 for i in range(8)] for i in range(num_samples)]
-
-        for j in range(cycles+1):
+        for j in range(self.cycles+1):
             delay(500*ms)
-            self.blue_mot()
+            self.blue_mot(coil_1_voltage=1.05, coil_2_voltage=0.45)
             self.transfer()
             self.broadband_red_mot()
             self.broadband_red_mot_compression()
             self.single_frequency_red_mot()
-            self.state_preparation()
-            self.clock_interrogation() 
+            self.state_preparation(coil_1_voltage=6.996, coil_2_voltage=0.4)
+            self.clock_interrogation(j) 
             self.detection()
-            self.detection_plot()
-            self.excitation_fraction_list()                  
+            
+            # Detection data
+            for i in range(self.num_samples):
+                self.detection_data[i] = self.samples[i][0]
 
+            self.set_dataset("excitation.detection", self.detection_data, broadcast=True, archive=True)
+            self.set_dataset("excitation.detection_x", self.detection_x, broadcast=True, archive=True)
+
+            # Excitation fraction
+            self.excitation_fraction_list[j] = self.excitation_fraction(self.detection_data, j)
+            
+            self.set_dataset("excitation.excitation_fractions", self.excitation_fraction_list, broadcast=True, archive=True)
+            self.set_dataset("excitation.frequencies_MHz", self.frequencies_MHz, broadcast=True, archive=True)
+            
+            # Plot both
+            if j == 0:
+                self.ccb.issue(
+                            "create_applet", 
+                            "Detection Plot", 
+                            "${artiq_applet}plot_xy"
+                            " excitation.detection"
+                            " --x excitation.detection_x"
+                            " --title Detection", 
+                            group = "excitation"
+                          )
+                self.ccb.issue(
+                            "create_applet", 
+                            "Excitation Fraction Plot", 
+                            "${artiq_applet}plot_xy"
+                            " excitation.excitation_fractions"
+                            " --x excitation.frequencies_MHz"
+                            " --title Excitation_Fraction", 
+                            group = "excitation"
+                          )
+        
         print("Test Complete")
