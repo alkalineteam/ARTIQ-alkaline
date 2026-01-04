@@ -38,4 +38,35 @@ grep -qxF "{ allowUnfree = true; }" "$NIX_CONF2" 2>/dev/null || \
 echo "{ allowUnfree = true; }" >> "$NIX_CONF2"
 
 sudo chmod +x fix-hashes.sh
-echo "✅ Setup complete. You will need to restart your shell for everything to work."
+
+# Docker Installation Check
+if ! command -v docker &> /dev/null; then
+    echo "📦 Docker is Installing..."
+    
+    # Add Docker's official GPG key:
+    sudo apt update
+    sudo apt install -y ca-certificates curl
+    sudo install -m 0755 -d /etc/apt/keyrings
+    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+    # Add the repository to Apt sources:
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.sources > /dev/null
+
+    sudo apt update
+    sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    echo "✅ Docker installed successfully."
+else
+    echo "✅ Docker available."
+fi
+
+# Add user to docker group if not already added
+if ! groups $USER | grep &>/dev/null 'docker'; then
+  echo "👤 Adding $USER to docker group..."
+  sudo usermod -aG docker $USER
+fi
+
+echo "✅ Setup complete. You will need to RESTART YOUR SESSION (logout/login) for docker permissions to apply."

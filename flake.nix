@@ -510,6 +510,9 @@ include = ["qasync*"]
             pkgs.mesa
             # nixGL for NVIDIA driver access - conditionally enabled
             (nixgl-pkgs.nixGLNvidia or null)
+            # Add docker-compose to packages
+             pkgs.docker-compose
+
             # Add any additional tools you need
           ] ++ (with artiq.packages.${system}; [
             vivado
@@ -528,6 +531,10 @@ include = ["qasync*"]
           };
 
           shellHook = ''
+            # Limit user intervention by starting service automatically
+            echo "🚀 Starting Docker daemon..."
+            sudo systemctl start docker || echo "Warning: Failed to start docker daemon (sudo required)"
+
             unset PYTHONPATH
             export REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
             
@@ -566,7 +573,7 @@ include = ["qasync*"]
             
             # Provide wheel runtime libs for PyQt6/qasync
             ZSTD_LIB="${pkgs.zstd.out or pkgs.zstd}/lib"
-            if [ ! -e "$ZSTD_LIB/libzstd.so.1" ]; then
+            if [ -e "$ZSTD_LIB/libzstd.so.1" ]; then
               ZSTD_LIB=$(dirname $(fd -a libzstd.so.1 ${pkgs.zstd} 2>/dev/null | head -n1 || true))
             fi
             export LD_LIBRARY_PATH="${pkgs.fontconfig.lib or pkgs.fontconfig}/lib:${pkgs.zstd.lib or pkgs.zstd}/lib:${pkgs.freetype.out}/lib:${pkgs.libpng}/lib:${pkgs.libjpeg}/lib:${pkgs.dbus.lib or pkgs.dbus}/lib:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:$ZSTD_LIB:${pkgs.glib.out}/lib:${pkgs.libxkbcommon}/lib:${pkgs.alsa-lib}/lib:${pkgs.xorg.libX11}/lib:${pkgs.xorg.libXext}/lib:${pkgs.xorg.libXrender}/lib:${pkgs.xorg.libxcb}/lib:${pkgs.xorg.libXi}/lib:${pkgs.xorg.libXfixes}/lib:${pkgs.xorg.libXcursor}/lib:${pkgs.xorg.libXrandr}/lib:${pkgs.xorg.libXdamage}/lib:${pkgs.xorg.libXcomposite}/lib:${pkgs.xorg.libXau}/lib:${pkgs.xorg.libXdmcp}/lib:${pkgs.xorg.libXtst}/lib:${pkgs.libglvnd}/lib:${pkgs.mesa}/lib:$LD_LIBRARY_PATH"
@@ -725,6 +732,12 @@ PY
       fi
             if [ -z "$(ls ${pkgs.libglvnd}/lib/libGL.so.1 2>/dev/null)" ]; then
               echo "(diagnostic) libGL.so.1 not present in libglvnd store path: ${pkgs.libglvnd}/lib" >&2
+            fi
+
+            # Start Docker services
+            if command -v docker-compose &> /dev/null; then
+              echo "Starting Docker services..."
+              docker-compose up -d 2>/dev/null || echo "Warning: Failed to start docker-compose services"
             fi
           '';
         }

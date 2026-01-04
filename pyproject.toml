@@ -61,6 +61,7 @@ dependencies = [
     "python-Levenshtein",
     "setuptools",
     "scikit-learn",
+    "influxdb-client",
 ]
 
 [project.license]
