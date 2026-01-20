@@ -12,6 +12,7 @@ from artiq.experiment import parallel, sequential
 from artiq.experiment import rpc
 from artiq.language.core import delay
 from artiq.language.units import ms, MHz
+from repository.metrics import MetricLogger
 class clock_transition_lookup_v2(EnvExperiment):
     def build(self):
         self.core: Core = self.get_device("core")
@@ -75,6 +76,39 @@ class clock_transition_lookup_v2(EnvExperiment):
             with parallel:
                 self.Probe.set(frequency=65*MHz, amplitude=0.00)
                 self.Probe_TTL.off()
+
+
+    @rpc(flags={"async"})
+    def log_to_influx(self, frequency: float, excitation_fraction: float):
+        """Log metrics to InfluxDB from the experiment."""
+        if not hasattr(self, "logger_instance"):
+            self.logger_instance = MetricLogger()
+            self.clock_run_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        
+        self.logger_instance.log_fields(
+            name="clock_transition",
+            fields={
+                "frequency": frequency,
+                "excitation_fraction": excitation_fraction
+            },
+            tags={"run_id": self.clock_run_id}
+        )
+
+    # @rpc(flags={"async"})
+    # def log_lock_status(self, error_signal: float, feedback_freq: float):
+    #     """Log lock status metrics to InfluxDB."""
+    #     if not hasattr(self, "logger_instance"):
+    #          self.logger_instance = MetricLogger()
+    #          self.clock_run_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        
+    #     self.logger_instance.log_fields(
+    #         name="clock_lock",
+    #         fields={
+    #             "error_signal": error_signal,
+    #             "feedback_frequency": feedback_freq
+    #         },
+    #         tags={"run_id": self.clock_run_id}
+    #     )
 
 
     @kernel
@@ -311,13 +345,15 @@ class clock_transition_lookup_v2(EnvExperiment):
                         " --title PMT_detection", 
                         group = "excitation"
                     )
+
+            # self.log_lock_status(error_signal, Clock_Feedback_Freq)
             
             # shutter 3.0ms delay
             # probe 0.5ms delay
             ground_state = detection[164:175]
             excited_state = detection[1053:1064]
             background = detection[1634:1645]
-
+            
             # # shutter 3.0ms delay
             # # probe 1.0ms delay
             # ground_state = detection[164:185]
@@ -361,5 +397,11 @@ class clock_transition_lookup_v2(EnvExperiment):
                         " --title Excitation_Fraction", 
                         group = "excitation"
                     )
+
+            # Calculate the current frequency for this cycle
+            frequency = frequencies_MHz[j]
+
+            # Log to InfluxDB for Grafana
+            self.log_to_influx(frequency, excitation_fraction)
 
         print("clock transition scan completed!!")
