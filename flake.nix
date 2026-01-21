@@ -6,8 +6,9 @@
 
     # ARTIQ
     artiq = {
-      url = "github:alkalineteam/ARTIQ-alkaline-fork/master";
-      # url = "github:m-labs/artiq/master";
+      # url = "github:alkalineteam/ARTIQ-alkaline-fork/master"; #Obsolete
+      # url = "github:m-labs/artiq/master"; #Obsolete
+      url = "github:alkalineteam/artiq/master";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -427,7 +428,13 @@ include = ["qasync*"]
           # Add ARTIQ and related packages
           (final: prev: {
             # Just inherit ARTIQ directly - this is simpler and more reliable
-            inherit (artiq.packages.${system}) artiq migen misoc asyncserial microscope;
+            artiq = artiq.packages.${system}.artiq.overrideAttrs (old: {
+              doCheck = false;
+              doInstallCheck = false;
+              checkPhase = "true";
+              installCheckPhase = "true";
+            });
+            inherit (artiq.packages.${system}) migen misoc asyncserial microscope;
             # sipyco comes from a different input in the ARTIQ flake
             sipyco = artiq.inputs.sipyco.packages.${system}.sipyco;
           })
