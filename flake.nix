@@ -607,11 +607,8 @@ include = ["qasync*"]
             fi
             
             # Provide wheel runtime libs for PyQt6/qasync
-            ZSTD_LIB="${pkgs.zstd.out or pkgs.zstd}/lib"
-            if [ -e "$ZSTD_LIB/libzstd.so.1" ]; then
-              ZSTD_LIB=$(dirname $(fd -a libzstd.so.1 ${pkgs.zstd} 2>/dev/null | head -n1 || true))
-            fi
-            export LD_LIBRARY_PATH="${pkgs.fontconfig.lib or pkgs.fontconfig}/lib:${pkgs.zstd.lib or pkgs.zstd}/lib:${pkgs.freetype.out}/lib:${pkgs.libpng}/lib:${pkgs.libjpeg}/lib:${pkgs.dbus.lib or pkgs.dbus}/lib:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:$ZSTD_LIB:${pkgs.glib.out}/lib:${pkgs.libxkbcommon}/lib:${pkgs.alsa-lib}/lib:${pkgs.xorg.libX11}/lib:${pkgs.xorg.libXext}/lib:${pkgs.xorg.libXrender}/lib:${pkgs.xorg.libxcb}/lib:${pkgs.xorg.libXi}/lib:${pkgs.xorg.libXfixes}/lib:${pkgs.xorg.libXcursor}/lib:${pkgs.xorg.libXrandr}/lib:${pkgs.xorg.libXdamage}/lib:${pkgs.xorg.libXcomposite}/lib:${pkgs.xorg.libXau}/lib:${pkgs.xorg.libXdmcp}/lib:${pkgs.xorg.libXtst}/lib:${pkgs.libglvnd}/lib:${pkgs.mesa}/lib:$LD_LIBRARY_PATH"
+            # Ensure zstd library is available
+            export LD_LIBRARY_PATH="${pkgs.zstd.out}/lib:${pkgs.fontconfig.lib or pkgs.fontconfig}/lib:${pkgs.freetype.out}/lib:${pkgs.libpng}/lib:${pkgs.libjpeg}/lib:${pkgs.dbus.lib or pkgs.dbus}/lib:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:${pkgs.glib.out}/lib:${pkgs.libxkbcommon}/lib:${pkgs.alsa-lib}/lib:${pkgs.xorg.libX11}/lib:${pkgs.xorg.libXext}/lib:${pkgs.xorg.libXrender}/lib:${pkgs.xorg.libxcb}/lib:${pkgs.xorg.libXi}/lib:${pkgs.xorg.libXfixes}/lib:${pkgs.xorg.libXcursor}/lib:${pkgs.xorg.libXrandr}/lib:${pkgs.xorg.libXdamage}/lib:${pkgs.xorg.libXcomposite}/lib:${pkgs.xorg.libXau}/lib:${pkgs.xorg.libXdmcp}/lib:${pkgs.xorg.libXtst}/lib:${pkgs.libglvnd}/lib:${pkgs.mesa}/lib:$LD_LIBRARY_PATH"
             # Provide DRI drivers for Mesa (software / non-NVIDIA rendering)
             if [ -d "${pkgs.mesa}/lib/dri" ]; then
               export LIBGL_DRIVERS_PATH="${pkgs.mesa}/lib/dri"
@@ -711,6 +708,9 @@ include = ["qasync*"]
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Ensure required libraries are in LD_LIBRARY_PATH
+export LD_LIBRARY_PATH="LD_LIBRARY_PATH_PLACEHOLDER''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
 # Auto-detect nixGL wrapper if not already exported and available.
 if [ -z "''${NIXGL_BIN:-}" ]; then
   if command -v nixGL >/dev/null 2>&1; then
@@ -731,6 +731,7 @@ EOF
                 # Substitute placeholders (avoid variable expansion issues in heredoc)
                 sed -i "s|MOD_PLACEHOLDER|$mod|g" "$wrapper"
                 sed -i "s|VENV_PY_PLACEHOLDER|${virtualenv}/bin/python|g" "$wrapper"
+                sed -i "s|LD_LIBRARY_PATH_PLACEHOLDER|${pkgs.zstd.out}/lib:${pkgs.fontconfig.lib or pkgs.fontconfig}/lib:${pkgs.freetype.out}/lib:${pkgs.stdenv.cc.cc.lib}/lib|g" "$wrapper"
                 chmod +x "$wrapper"
               fi
             done
