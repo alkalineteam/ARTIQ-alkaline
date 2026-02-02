@@ -37,6 +37,37 @@ echo "extra-sandbox-paths = /opt" >> "$NIX_CONF1"
 grep -qxF "{ allowUnfree = true; }" "$NIX_CONF2" 2>/dev/null || \
 echo "{ allowUnfree = true; }" >> "$NIX_CONF2"
 
+# Configure system-level Nix for GPU auto-detection
+# This allows nixGL to read /proc/driver/nvidia/version during builds
+SYSTEM_NIX_CONF="/etc/nix/nix.conf"
+if [ -f "$SYSTEM_NIX_CONF" ]; then
+    echo "⚙️  Configuring GPU auto-detection in $SYSTEM_NIX_CONF"
+    
+    # Add sandbox path for NVIDIA driver detection
+    if ! grep -q "extra-sandbox-paths.*=/proc/driver/nvidia" "$SYSTEM_NIX_CONF" 2>/dev/null; then
+        echo "   Adding /proc/driver/nvidia to sandbox-paths..."
+        echo "extra-sandbox-paths = /proc/driver/nvidia" | sudo tee -a "$SYSTEM_NIX_CONF" > /dev/null
+    fi
+    
+    # Add current user to trusted-users
+    if ! grep -q "trusted-users.*$USER" "$SYSTEM_NIX_CONF" 2>/dev/null; then
+        echo "   Adding $USER to trusted-users..."
+        if grep -q "^trusted-users" "$SYSTEM_NIX_CONF"; then
+            # Append to existing trusted-users line
+            sudo sed -i "s/^trusted-users.*/& $USER/" "$SYSTEM_NIX_CONF"
+        else
+            echo "trusted-users = $USER" | sudo tee -a "$SYSTEM_NIX_CONF" > /dev/null
+        fi
+    fi
+    
+    # Restart nix-daemon to apply changes
+    echo "   Restarting nix-daemon..."
+    sudo systemctl restart nix-daemon || echo "   Warning: Failed to restart nix-daemon"
+    echo "✅ GPU auto-detection configured"
+else
+    echo "⚠️  $SYSTEM_NIX_CONF not found - GPU auto-detection may require manual configuration"
+fi
+
 sudo chmod +x fix-hashes.sh
 
 # Docker Installation Check

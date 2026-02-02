@@ -50,17 +50,43 @@
     system = "x86_64-linux";
     pkgs = import nixpkgs {
       inherit system;
-      config.allowUnfree = true;
     };
     
-    # Check if NVIDIA GPU is available by looking for NVIDIA devices or driver modules
-    # Use only path-based checks to avoid file read errors
-    hasNvidiaGpu = builtins.pathExists "/dev/nvidia0" ||
-                    builtins.pathExists "/proc/driver/nvidia" ||
-                    builtins.pathExists "/sys/module/nvidia";
+    # nixGL packages for GPU acceleration
+    # Auto-detect NVIDIA driver version from /proc (sandbox has access via extra-sandbox-paths)
+    nvidiaDriverVersion = let
+      # Use runCommand to read /proc/driver/nvidia/version (works with sandbox-paths config)
+      versionFile = pkgs.runCommand "nvidia-version-detect" {
+        # Force rebuild on each evaluation to get fresh version
+        time = builtins.currentTime;
+        preferLocalBuild = true;
+        allowSubstitutes = false;
+      } ''
+        if [ -f /proc/driver/nvidia/version ]; then
+          # Extract version number (e.g., 590.48.01) from the file
+          grep -oP '\d+\.\d+\.\d+' /proc/driver/nvidia/version | head -1 > $out
+        else
+          echo "" > $out
+        fi
+      '';
+      detectedVersion = builtins.tryEval (pkgs.lib.strings.trim (builtins.readFile versionFile));
+      envVersion = builtins.getEnv "NVIDIA_DRIVER_VERSION";
+    in
+      if detectedVersion.success && detectedVersion.value != "" then detectedVersion.value
+      else if envVersion != "" then envVersion
+      else null;
+    hasNvidiaVersion = nvidiaDriverVersion != null;
     
-    # nixGL packages - only load if NVIDIA GPU is detected to avoid null driver version errors
-    nixgl-pkgs = if hasNvidiaGpu then nixgl.packages.${system} else {};
+    # Import nixGL with explicitly detected version
+    nixgl-base = import (nixgl + "/default.nix") {
+      inherit pkgs;
+      nvidiaVersion = nvidiaDriverVersion;
+      enable32bits = true;
+    };
+    
+    # Expose the appropriate nixGL wrapper
+    nixgl-wrapper = if hasNvidiaVersion then nixgl-base.nixGLNvidia else null;
+    hasNixGL = nixgl-wrapper != null;
 
     # Python version to use
     python = pkgs.python313;
@@ -485,7 +511,7 @@ include = ["qasync*"]
 
         in pkgs.mkShell {
           name = "artiq-fork-uv2nix-shell";
-          packages = builtins.filter (x: x != null) [
+          packages = builtins.filter (x: x != null) ([
             virtualenv
             pkgs.uv
             uvAddWrapper
@@ -515,8 +541,8 @@ include = ["qasync*"]
             # OpenGL libraries for non-NVIDIA (and fallback software rendering)
             pkgs.libglvnd
             pkgs.mesa
-            # nixGL for NVIDIA driver access - conditionally enabled
-            (nixgl-pkgs.nixGLNvidia or null)
+            # nixGL for NVIDIA driver access (auto-detected with --impure)
+            ] ++ (if hasNixGL then [ nixgl-wrapper ] else []) ++ [
             # Add docker-compose to packages
              pkgs.docker-compose
 
@@ -524,7 +550,7 @@ include = ["qasync*"]
           ] ++ (with artiq.packages.${system}; [
             vivado
             openocd-bscanspi
-          ]);
+          ]));
 
           env = {
             # Use the uv2nix virtual environment (in /nix/store)
@@ -569,13 +595,15 @@ include = ["qasync*"]
             # Dynamically add pythonparser (needed by ARTIQ core compiler) if present in ARTIQ store closure
             if command -v artiq_run >/dev/null 2>&1; then
               _ARTIQ_BIN=$(command -v artiq_run)
-              _ARTIQ_ROOT=$(dirname $(dirname "$_ARTIQ_BIN"))
-              for sp in "$_ARTIQ_ROOT"/lib/python*/site-packages; do
-                if [ -d "$sp/pythonparser" ]; then
-                  export PYTHONPATH="$sp:$PYTHONPATH"
-                  break
-                fi
-              done
+              if [ -n "$_ARTIQ_BIN" ]; then
+                _ARTIQ_ROOT=$(dirname $(dirname "$_ARTIQ_BIN"))
+                for sp in "$_ARTIQ_ROOT"/lib/python*/site-packages; do
+                  if [ -d "$sp/pythonparser" ]; then
+                    export PYTHONPATH="$sp:$PYTHONPATH"
+                    break
+                  fi
+                done
+              fi
             fi
             
             # Provide wheel runtime libs for PyQt6/qasync
@@ -627,11 +655,11 @@ include = ["qasync*"]
             export PATH=$CUDA_PATH/bin:$PATH
             export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$LD_LIBRARY_PATH
             
-            # Auto-detect NVIDIA GPU and set up nixGL aliases
-            ${if nixgl-pkgs ? nixGLNvidia then ''
-              if command -v lspci >/dev/null 2>&1 && lspci | grep -i nvidia > /dev/null 2>&1; then
-                # NVIDIA GPU detected
-                NIXGL_BIN=$(find ${nixgl-pkgs.nixGLNvidia}/bin -name "nixGLNvidia-*" 2>/dev/null | head -n1)
+            # Auto-detect NVIDIA GPU and set up nixGL aliases (runtime detection via /proc)
+            ${if hasNixGL then ''
+              if [ -e /proc/driver/nvidia/version ]; then
+                # NVIDIA driver is loaded - GPU is available
+                NIXGL_BIN=$(find ${nixgl-wrapper}/bin -name "nixGLNvidia-*" 2>/dev/null | head -n1)
                 GPU_TYPE="NVIDIA"
                 
                 if [ -n "$NIXGL_BIN" ]; then
@@ -640,16 +668,23 @@ include = ["qasync*"]
                   alias jupyter="$NIXGL_BIN jupyter"
                   alias ipython="$NIXGL_BIN ipython"
                   export NIXGL_BIN="$NIXGL_BIN"
+                else
+                  # nixGL wrapper not found in expected location
+                  GPU_TYPE="CPU-only (nixGL wrapper not found)"
                 fi
               else
-                # No NVIDIA GPU or lspci not available - use CPU-only mode
+                # No NVIDIA driver loaded - use CPU-only mode
                 NIXGL_BIN=""
                 GPU_TYPE="CPU-only"
               fi
             '' else ''
-              # nixGL not available - use CPU-only mode
+              # nixGL auto-detection failed - use CPU-only mode
               NIXGL_BIN=""
-              GPU_TYPE="CPU-only (nixGL unavailable)"
+              GPU_TYPE="CPU-only"
+              if [ -e /proc/driver/nvidia/version ]; then
+                echo "NVIDIA GPU detected but nixGL auto-detection failed."
+                echo "You may need to run: nix develop --impure"
+              fi
             ''}
             
             # Add ARTIQ store executables first
