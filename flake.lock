@@ -14,17 +14,17 @@
         "src-pythonparser": "src-pythonparser"
       },
       "locked": {
-        "lastModified": 1756226386,
-        "narHash": "sha256-JjLL3tUCSyWyvH/G4os5wOSpGdWJirBR3amNppmj53A=",
+        "lastModified": 1768981143,
+        "narHash": "sha256-RU/KV3Gula9bJ7TuNvsZhuf5IB+oGCDYE9QXMhn/o6A=",
         "owner": "alkalineteam",
-        "repo": "ARTIQ-alkaline-fork",
-        "rev": "4d8d2aa000e68e68a7b72a2f3dfe08775a6ad177",
+        "repo": "artiq",
+        "rev": "739b0660fe352a2429243739830c541228fa9ed8",
         "type": "github"
       },
       "original": {
         "owner": "alkalineteam",
         "ref": "master",
-        "repo": "ARTIQ-alkaline-fork",
+        "repo": "artiq",
         "type": "github"
       }
     },
@@ -41,17 +41,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1756174750,
-        "narHash": "sha256-GSYJKbI5uLhB5X9b+N23vZtSFkStvlKlj/QoKL5+YLE=",
-        "owner": "m-labs",
-        "repo": "artiq-comtools",
-        "rev": "3635c4b9b61cde5d8c5b068263bed46752e6779e",
-        "type": "github"
+        "lastModified": 1767353405,
+        "narHash": "sha256-KGQqMMN+xavRYEPsBHnNptLvMGxaPzVqHJnYiOEo57c=",
+        "ref": "refs/heads/master",
+        "rev": "3da1f80d702b3a01c4b4fba9e5bc832b79097338",
+        "revCount": 44,
+        "type": "git",
+        "url": "https://git.m-labs.hk/M-Labs/artiq-comtools.git"
       },
       "original": {
-        "owner": "m-labs",
-        "repo": "artiq-comtools",
-        "type": "github"
+        "type": "git",
+        "url": "https://git.m-labs.hk/M-Labs/artiq-comtools.git"
       }
     },
     "fenix": {
@@ -122,11 +122,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1752689277,
-        "narHash": "sha256-uldUBFkZe/E7qbvxa3mH1ItrWZyT6w1dBKJQF/3ZSsc=",
+        "lastModified": 1763384566,
+        "narHash": "sha256-r+wgI+WvNaSdxQmqaM58lVNvJYJ16zoq+tKN20cLst4=",
         "owner": "nix-community",
         "repo": "naersk",
-        "rev": "0e72363d0938b0208d6c646d10649164c43f4d64",
+        "rev": "d4155d6ebb70fbe2314959842f744aa7cabbbf6a",
         "type": "github"
       },
       "original": {
@@ -275,67 +275,67 @@
         ]
       },
       "locked": {
-        "lastModified": 1756181317,
-        "narHash": "sha256-DkcgZ0K6lsxzBWc31GTyufuSOpcorVv5OsZLHphHBtg=",
-        "owner": "m-labs",
-        "repo": "sipyco",
-        "rev": "96fcefbea490a9b42c862393860d2e586b05d744",
-        "type": "github"
+        "lastModified": 1767320872,
+        "narHash": "sha256-0lUkzOxOnjk3vQdsL9Yt3KLctYBTZgIRd8RvcITbqO0=",
+        "ref": "refs/heads/master",
+        "rev": "ce454bb64257b1bcef3703f258aaf7fa4ee0c275",
+        "revCount": 154,
+        "type": "git",
+        "url": "https://git.m-labs.hk/M-Labs/sipyco.git"
       },
       "original": {
-        "owner": "m-labs",
-        "repo": "sipyco",
-        "type": "github"
+        "type": "git",
+        "url": "https://git.m-labs.hk/M-Labs/sipyco.git"
       }
     },
     "src-migen": {
       "flake": false,
       "locked": {
-        "lastModified": 1749544952,
-        "narHash": "sha256-NshlPiORBHWljSUP5bB7YBxe7k8dW0t8UXOsIq2EK8I=",
-        "owner": "m-labs",
-        "repo": "migen",
-        "rev": "6e3a9e150fb006dabc4b55043d3af18dbfecd7e8",
-        "type": "github"
+        "lastModified": 1767354910,
+        "narHash": "sha256-gRAvl5cUvrjq4t7htXsDBt4F8MEbHXFZoS0jbhrEs1I=",
+        "ref": "refs/heads/master",
+        "rev": "0efcff4cb875746dce46987d2fa476897c8c671e",
+        "revCount": 2064,
+        "type": "git",
+        "url": "https://git.m-labs.hk/M-Labs/migen.git"
       },
       "original": {
-        "owner": "m-labs",
-        "repo": "migen",
-        "type": "github"
+        "type": "git",
+        "url": "https://git.m-labs.hk/M-Labs/migen.git"
       }
     },
     "src-misoc": {
       "flake": false,
       "locked": {
-        "lastModified": 1755079382,
-        "narHash": "sha256-XLWVEML+QRUkdAzQu9Qz8Quq0waTTdrJFLNtcdLMnyM=",
+        "lastModified": 1765867404,
+        "narHash": "sha256-YPYUHVIryXDp4W2hUtHUtBbRKIrbhInWImT0NKaacSY=",
         "ref": "refs/heads/master",
-        "rev": "1b86f6c0fd60e3e93f34c227c667372ecb6a5ded",
-        "revCount": 2501,
+        "rev": "7ab412de11f6533cd68cd818924da5c28a484ccd",
+        "revCount": 2509,
         "submodules": true,
         "type": "git",
-        "url": "https://github.com/m-labs/misoc.git"
+        "url": "https://git.m-labs.hk/M-Labs/misoc.git"
       },
       "original": {
         "submodules": true,
         "type": "git",
-        "url": "https://github.com/m-labs/misoc.git"
+        "url": "https://git.m-labs.hk/M-Labs/misoc.git"
       }
     },
     "src-pythonparser": {
       "flake": false,
       "locked": {
-        "lastModified": 1628745371,
-        "narHash": "sha256-p6TgeeaK4NEmbhimEXp31W8hVRo4DgWmcCoqZ+UdN60=",
-        "owner": "m-labs",
-        "repo": "pythonparser",
-        "rev": "5413ee5c9f8760e95c6acd5d6e88dabb831ad201",
-        "type": "github"
+        "lastModified": 1767427016,
+        "narHash": "sha256-E57okn+3gwvtXnF/qF/jypNYqijCLUYOEYLF9ZCzHpE=",
+        "ref": "refs/heads/master",
+        "rev": "a2ace427c84ee5b1e9bd9dbc9b9337e50fc54077",
+        "revCount": 152,
+        "type": "git",
+        "url": "https://git.m-labs.hk/M-Labs/pythonparser.git"
       },
       "original": {
-        "owner": "m-labs",
-        "repo": "pythonparser",
-        "type": "github"
+        "type": "git",
+        "url": "https://git.m-labs.hk/M-Labs/pythonparser.git"
       }
     },
     "systems": {

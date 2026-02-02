@@ -16,7 +16,8 @@ Custom ARTIQ fork with a reproducible Nix + uv2nix Python 3.13 environment, CUDA
 
 ## Prerequisites
 
-- Nix with flakes enabled (`experimental-features = nix-command flakes`)
+- Nix with flakes enabled (installed automatically by `./setup.sh` if missing)
+- Docker Engine (installed automatically by `./setup.sh` if missing)
 - (Optional) NVIDIA GPU + drivers; nixGL for graphical / CUDA contexts
 - `uv` is provided inside the shell (external install not required)
 
@@ -76,6 +77,12 @@ Run it after every `uv lock` (the helper wrappers already do this) or let the pr
 - Aliases may wrap `python`, `python3`, `jupyter` with the appropriate nixGL launcher.
 - Use `cuda-run <cmd>` to force execution under nixGL; `python-cuda` provides a convenience Python launcher.
 - If no GPU is detected, the environment gracefully falls back to CPU-only mode.
+
+## Grafana & InfluxDB Integration
+- **Automatic Startup**: `nix develop --impure` automatically ensures `docker-compose` services (Grafana/InfluxDB) are running.
+- **Metrics Logging**: Use the `MetricLogger` helper in `repository/metrics.py`.
+- **Dashboards**: Grafana is available at [http://localhost:3000](http://localhost:3000) (User/Pass: `admin`/`admin`).
+- **Data Source**: InfluxDB is pre-configured via provisioning. Use the `test_metrics.py` script to verify connection.
 
 ## Project Layout
 

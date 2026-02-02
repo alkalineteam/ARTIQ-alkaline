@@ -14,3 +14,5 @@ artiq_kasli
 flash
 results
 .dev-bin/
+.venv/
+.vscode/

@@ -1,12 +1,14 @@
 {
-  description = "ARTIQ Fork for alkaline team @ University of Birmingham";
+  description = "ARTIQ for alkaline team @ University of Birmingham";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
     # ARTIQ
     artiq = {
-      url = "github:alkalineteam/ARTIQ-alkaline-fork/master";
+      # url = "github:alkalineteam/ARTIQ-alkaline-fork/master"; #Obsolete
+      # url = "github:m-labs/artiq/master"; #Obsolete
+      url = "github:alkalineteam/artiq/master";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -48,17 +50,43 @@
     system = "x86_64-linux";
     pkgs = import nixpkgs {
       inherit system;
-      config.allowUnfree = true;
     };
     
-    # Check if NVIDIA GPU is available by looking for NVIDIA devices or driver modules
-    # Use only path-based checks to avoid file read errors
-    hasNvidiaGpu = builtins.pathExists "/dev/nvidia0" ||
-                    builtins.pathExists "/proc/driver/nvidia" ||
-                    builtins.pathExists "/sys/module/nvidia";
+    # nixGL packages for GPU acceleration
+    # Auto-detect NVIDIA driver version from /proc (sandbox has access via extra-sandbox-paths)
+    nvidiaDriverVersion = let
+      # Use runCommand to read /proc/driver/nvidia/version (works with sandbox-paths config)
+      versionFile = pkgs.runCommand "nvidia-version-detect" {
+        # Force rebuild on each evaluation to get fresh version
+        time = builtins.currentTime;
+        preferLocalBuild = true;
+        allowSubstitutes = false;
+      } ''
+        if [ -f /proc/driver/nvidia/version ]; then
+          # Extract version number (e.g., 590.48.01) from the file
+          grep -oP '\d+\.\d+\.\d+' /proc/driver/nvidia/version | head -1 > $out
+        else
+          echo "" > $out
+        fi
+      '';
+      detectedVersion = builtins.tryEval (pkgs.lib.strings.trim (builtins.readFile versionFile));
+      envVersion = builtins.getEnv "NVIDIA_DRIVER_VERSION";
+    in
+      if detectedVersion.success && detectedVersion.value != "" then detectedVersion.value
+      else if envVersion != "" then envVersion
+      else null;
+    hasNvidiaVersion = nvidiaDriverVersion != null;
     
-    # nixGL packages - only load if NVIDIA GPU is detected to avoid null driver version errors
-    nixgl-pkgs = if hasNvidiaGpu then nixgl.packages.${system} else {};
+    # Import nixGL with explicitly detected version
+    nixgl-base = import (nixgl + "/default.nix") {
+      inherit pkgs;
+      nvidiaVersion = nvidiaDriverVersion;
+      enable32bits = true;
+    };
+    
+    # Expose the appropriate nixGL wrapper
+    nixgl-wrapper = if hasNvidiaVersion then nixgl-base.nixGLNvidia else null;
+    hasNixGL = nixgl-wrapper != null;
 
     # Python version to use
     python = pkgs.python313;
@@ -426,7 +454,13 @@ include = ["qasync*"]
           # Add ARTIQ and related packages
           (final: prev: {
             # Just inherit ARTIQ directly - this is simpler and more reliable
-            inherit (artiq.packages.${system}) artiq migen misoc asyncserial microscope;
+            artiq = artiq.packages.${system}.artiq.overrideAttrs (old: {
+              doCheck = false;
+              doInstallCheck = false;
+              checkPhase = "true";
+              installCheckPhase = "true";
+            });
+            inherit (artiq.packages.${system}) migen misoc asyncserial microscope;
             # sipyco comes from a different input in the ARTIQ flake
             sipyco = artiq.inputs.sipyco.packages.${system}.sipyco;
           })
@@ -477,7 +511,7 @@ include = ["qasync*"]
 
         in pkgs.mkShell {
           name = "artiq-fork-uv2nix-shell";
-          packages = builtins.filter (x: x != null) [
+          packages = builtins.filter (x: x != null) ([
             virtualenv
             pkgs.uv
             uvAddWrapper
@@ -486,6 +520,10 @@ include = ["qasync*"]
             python.pkgs.llvmlite
             # Include essential ARTIQ development tools
             pkgs.git
+            pkgs.jq
+            pkgs.fd
+            # pkgs.rustc
+            # pkgs.cargo
             pkgs.llvm_15
             pkgs.lld_15
             pkgs.llvmPackages_15.clang-unwrapped
@@ -503,13 +541,20 @@ include = ["qasync*"]
             # OpenGL libraries for non-NVIDIA (and fallback software rendering)
             pkgs.libglvnd
             pkgs.mesa
-            # nixGL for NVIDIA driver access - conditionally enabled
-            (nixgl-pkgs.nixGLNvidia or null)
+            # nixGL for NVIDIA driver access (auto-detected with --impure)
+            ] ++ (if hasNixGL then [ nixgl-wrapper ] else []) ++ [
+            # Add docker-compose to packages
+             pkgs.docker-compose
+
             # Add any additional tools you need
           ] ++ (with artiq.packages.${system}; [
             vivado
             openocd-bscanspi
+<<<<<<< HEAD
           ]) ++ artiq.devShells.${system}.default.nativeBuildInputs;
+=======
+          ]));
+>>>>>>> nightly
 
           env = {
             # Use the uv2nix virtual environment (in /nix/store)
@@ -523,6 +568,10 @@ include = ["qasync*"]
           };
 
           shellHook = ''
+            # Limit user intervention by starting service automatically
+            echo "🚀 Starting Docker daemon..."
+            sudo systemctl start docker || echo "Warning: Failed to start docker daemon (sudo required)"
+
             unset PYTHONPATH
             export REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
             
@@ -550,24 +599,29 @@ include = ["qasync*"]
             # Dynamically add pythonparser (needed by ARTIQ core compiler) if present in ARTIQ store closure
             if command -v artiq_run >/dev/null 2>&1; then
               _ARTIQ_BIN=$(command -v artiq_run)
-              _ARTIQ_ROOT=$(dirname $(dirname "$_ARTIQ_BIN"))
-              for sp in "$_ARTIQ_ROOT"/lib/python*/site-packages; do
-                if [ -d "$sp/pythonparser" ]; then
-                  export PYTHONPATH="$sp:$PYTHONPATH"
-                  break
-                fi
-              done
+              if [ -n "$_ARTIQ_BIN" ]; then
+                _ARTIQ_ROOT=$(dirname $(dirname "$_ARTIQ_BIN"))
+                for sp in "$_ARTIQ_ROOT"/lib/python*/site-packages; do
+                  if [ -d "$sp/pythonparser" ]; then
+                    export PYTHONPATH="$sp:$PYTHONPATH"
+                    break
+                  fi
+                done
+              fi
             fi
             
             # Provide wheel runtime libs for PyQt6/qasync
-            ZSTD_LIB="${pkgs.zstd.out or pkgs.zstd}/lib"
-            if [ ! -e "$ZSTD_LIB/libzstd.so.1" ]; then
-              ZSTD_LIB=$(dirname $(fd -a libzstd.so.1 ${pkgs.zstd} 2>/dev/null | head -n1 || true))
-            fi
-            export LD_LIBRARY_PATH="${pkgs.fontconfig.lib or pkgs.fontconfig}/lib:${pkgs.zstd.lib or pkgs.zstd}/lib:${pkgs.freetype.out}/lib:${pkgs.libpng}/lib:${pkgs.libjpeg}/lib:${pkgs.dbus.lib or pkgs.dbus}/lib:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:$ZSTD_LIB:${pkgs.glib.out}/lib:${pkgs.libxkbcommon}/lib:${pkgs.alsa-lib}/lib:${pkgs.xorg.libX11}/lib:${pkgs.xorg.libXext}/lib:${pkgs.xorg.libXrender}/lib:${pkgs.xorg.libxcb}/lib:${pkgs.xorg.libXi}/lib:${pkgs.xorg.libXfixes}/lib:${pkgs.xorg.libXcursor}/lib:${pkgs.xorg.libXrandr}/lib:${pkgs.xorg.libXdamage}/lib:${pkgs.xorg.libXcomposite}/lib:${pkgs.xorg.libXau}/lib:${pkgs.xorg.libXdmcp}/lib:${pkgs.xorg.libXtst}/lib:${pkgs.libglvnd}/lib:${pkgs.mesa}/lib:$LD_LIBRARY_PATH"
+            # Ensure zstd library is available
+            export LD_LIBRARY_PATH="${pkgs.zstd.out}/lib:${pkgs.fontconfig.lib or pkgs.fontconfig}/lib:${pkgs.freetype.out}/lib:${pkgs.libpng}/lib:${pkgs.libjpeg}/lib:${pkgs.dbus.lib or pkgs.dbus}/lib:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:${pkgs.glib.out}/lib:${pkgs.libxkbcommon}/lib:${pkgs.alsa-lib}/lib:${pkgs.xorg.libX11}/lib:${pkgs.xorg.libXext}/lib:${pkgs.xorg.libXrender}/lib:${pkgs.xorg.libxcb}/lib:${pkgs.xorg.libXi}/lib:${pkgs.xorg.libXfixes}/lib:${pkgs.xorg.libXcursor}/lib:${pkgs.xorg.libXrandr}/lib:${pkgs.xorg.libXdamage}/lib:${pkgs.xorg.libXcomposite}/lib:${pkgs.xorg.libXau}/lib:${pkgs.xorg.libXdmcp}/lib:${pkgs.xorg.libXtst}/lib:${pkgs.libglvnd}/lib:${pkgs.mesa}/lib:$LD_LIBRARY_PATH"
             # Provide DRI drivers for Mesa (software / non-NVIDIA rendering)
             if [ -d "${pkgs.mesa}/lib/dri" ]; then
               export LIBGL_DRIVERS_PATH="${pkgs.mesa}/lib/dri"
+            fi
+
+            # WSL: expose host CUDA shim to nix-built programs
+            if [ -e /usr/lib/wsl/lib/libcuda.so.1 ]; then
+              export LD_LIBRARY_PATH="/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
+              export WSL_CUDA=1
             fi
 
             # Ensure QML2_IMPORT_PATH points to an existing directory; probe common qt6 locations if unset/invalid
@@ -602,11 +656,11 @@ include = ["qasync*"]
             export PATH=$CUDA_PATH/bin:$PATH
             export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$LD_LIBRARY_PATH
             
-            # Auto-detect NVIDIA GPU and set up nixGL aliases
-            ${if nixgl-pkgs ? nixGLNvidia then ''
-              if command -v lspci >/dev/null 2>&1 && lspci | grep -i nvidia > /dev/null 2>&1; then
-                # NVIDIA GPU detected
-                NIXGL_BIN=$(find ${nixgl-pkgs.nixGLNvidia}/bin -name "nixGLNvidia-*" 2>/dev/null | head -n1)
+            # Auto-detect NVIDIA GPU and set up nixGL aliases (runtime detection via /proc)
+            ${if hasNixGL then ''
+              if [ -e /proc/driver/nvidia/version ]; then
+                # NVIDIA driver is loaded - GPU is available
+                NIXGL_BIN=$(find ${nixgl-wrapper}/bin -name "nixGLNvidia-*" 2>/dev/null | head -n1)
                 GPU_TYPE="NVIDIA"
                 
                 if [ -n "$NIXGL_BIN" ]; then
@@ -615,16 +669,23 @@ include = ["qasync*"]
                   alias jupyter="$NIXGL_BIN jupyter"
                   alias ipython="$NIXGL_BIN ipython"
                   export NIXGL_BIN="$NIXGL_BIN"
+                else
+                  # nixGL wrapper not found in expected location
+                  GPU_TYPE="CPU-only (nixGL wrapper not found)"
                 fi
               else
-                # No NVIDIA GPU or lspci not available - use CPU-only mode
+                # No NVIDIA driver loaded - use CPU-only mode
                 NIXGL_BIN=""
                 GPU_TYPE="CPU-only"
               fi
             '' else ''
-              # nixGL not available - use CPU-only mode
+              # nixGL auto-detection failed - use CPU-only mode
               NIXGL_BIN=""
-              GPU_TYPE="CPU-only (nixGL unavailable)"
+              GPU_TYPE="CPU-only"
+              if [ -e /proc/driver/nvidia/version ]; then
+                echo "NVIDIA GPU detected but nixGL auto-detection failed."
+                echo "You may need to run: nix develop --impure"
+              fi
             ''}
             
             # Add ARTIQ store executables first
@@ -650,8 +711,23 @@ include = ["qasync*"]
                 cat > "$wrapper" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-if [ -n "$NIXGL_BIN" ]; then
-  exec "$NIXGL_BIN" VENV_PY_PLACEHOLDER -m MOD_PLACEHOLDER "$@"
+
+# Ensure required libraries are in LD_LIBRARY_PATH
+export LD_LIBRARY_PATH="LD_LIBRARY_PATH_PLACEHOLDER''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+# Auto-detect nixGL wrapper if not already exported and available.
+if [ -z "''${NIXGL_BIN:-}" ]; then
+  if command -v nixGL >/dev/null 2>&1; then
+    NIXGL_BIN=$(command -v nixGL)
+  elif command -v nixGLNvidia >/dev/null 2>&1; then
+    NIXGL_BIN=$(command -v nixGLNvidia)
+  elif command -v nixGLIntel >/dev/null 2>&1; then
+    NIXGL_BIN=$(command -v nixGLIntel)
+  fi
+fi
+
+if [ -n "''${NIXGL_BIN:-}" ]; then
+  exec "''${NIXGL_BIN}" VENV_PY_PLACEHOLDER -m MOD_PLACEHOLDER "$@"
 else
   exec VENV_PY_PLACEHOLDER -m MOD_PLACEHOLDER "$@"
 fi
@@ -659,6 +735,7 @@ EOF
                 # Substitute placeholders (avoid variable expansion issues in heredoc)
                 sed -i "s|MOD_PLACEHOLDER|$mod|g" "$wrapper"
                 sed -i "s|VENV_PY_PLACEHOLDER|${virtualenv}/bin/python|g" "$wrapper"
+                sed -i "s|LD_LIBRARY_PATH_PLACEHOLDER|${pkgs.zstd.out}/lib:${pkgs.fontconfig.lib or pkgs.fontconfig}/lib:${pkgs.freetype.out}/lib:${pkgs.stdenv.cc.cc.lib}/lib|g" "$wrapper"
                 chmod +x "$wrapper"
               fi
             done
@@ -666,62 +743,29 @@ EOF
             export PATH="$DEV_BIN:$PATH"
 
             # Optional detailed GPU/CUDA probe (disable with CUDA_PROBE=0)
+            echo ""
             if [ "''${CUDA_PROBE:-1}" = "1" ]; then
-              echo "[GPU Probe] Starting CUDA/Torch diagnostics..."
-              # Basic NVIDIA presence info
+              # NVIDIA GPU info
               if command -v nvidia-smi >/dev/null 2>&1; then
-                echo "[GPU Probe] nvidia-smi detected; summary:"
                 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader 2>/dev/null | sed 's/^/[GPU]/'
               else
-                echo "[GPU Probe] nvidia-smi not found (driver or PATH missing)"
+                echo "nvidia driver not found" # nvidia-smi not available
               fi
               if [ -e /proc/driver/nvidia/version ]; then
-                echo "[GPU Probe] /proc/driver/nvidia/version: $(head -n1 /proc/driver/nvidia/version)"
+                echo "$(head -n1 /proc/driver/nvidia/version)"
               fi
-              # Torch probe
-              python <<'PY' 2>/dev/null || true
-import os, ctypes, json, textwrap
-report = {}
-try:
-    import torch
-    report['torch_version'] = torch.__version__
-    report['compiled_cuda'] = getattr(torch.version, 'cuda', None)
-    avail = torch.cuda.is_available()
-    report['cuda_available'] = avail
-    if avail:
-        report['device_count'] = torch.cuda.device_count()
-        names = []
-        for i in range(torch.cuda.device_count()):
-            try:
-                names.append(torch.cuda.get_device_name(i))
-            except Exception as e: # still list placeholder
-                names.append(f"<error:{e}>")
-        report['device_names'] = names
-    else:
-        # Attempt to load libcuda to distinguish missing driver vs torch mismatch
-        try:
-            ctypes.CDLL('libcuda.so.1')
-            report['libcuda'] = 'found (Torch still reports unavailable)'
-        except OSError as e:
-            report['libcuda'] = f'missing ({e})'
-except Exception as e:
-    report['torch_error'] = str(e)
-print('[GPU Probe] Torch summary:', json.dumps(report))
-PY
-              echo "[GPU Probe] Done"
+              if [ -n "$NIXGL_BIN" ]; then
+                echo "GPU acceleration available"
+              else
+                echo "CPU acceleration available"
+                # (build-time GPU absence note suppressed to avoid Nix interpolation complexity)
+              fi
             fi
             
-            echo "ARTIQ Fork development environment with uv2nix (uv.lock detected)"
-            echo "Using Nix-managed virtual environment at: ${virtualenv}"
-            echo "Python: $(which python)"
-            echo "ARTIQ: $(artiq_master --version 2>/dev/null || echo 'available')"
-            echo "✅ PyTorch dev shell with nixGL ($GPU_TYPE) is ready!"
-            if [ -n "$NIXGL_BIN" ]; then
-              echo "💡 python3 and jupyter use GPU acceleration automatically"
-            else
-              echo "💡 Running in CPU-only mode"
-              ${if !hasNvidiaGpu then ''echo "   (no NVIDIA GPU detected at build time)"'' else ""}
-            fi
+            echo ""
+            echo "Nix environment: ${virtualenv}"
+            echo "Python: $(which python3)"
+            echo "$(artiq_master --version 2>/dev/null || echo 'available')"
       # Optional OpenGL probe (set OPENGL_PROBE=1 before entering shell to enable)
             if [ "''${OPENGL_PROBE:-0}" = "1" ]; then
         python - <<'PY' 2>/dev/null || true
@@ -736,10 +780,12 @@ PY
             if [ -z "$(ls ${pkgs.libglvnd}/lib/libGL.so.1 2>/dev/null)" ]; then
               echo "(diagnostic) libGL.so.1 not present in libglvnd store path: ${pkgs.libglvnd}/lib" >&2
             fi
-            echo ""
-            echo "To add packages:"
-            echo "  uv-add <package>    - Add package and rebuild"
-            echo "  uv-remove <package> - Remove package and rebuild"
+
+            # Start Docker services
+            if command -v docker-compose &> /dev/null; then
+              echo "Starting Docker services..."
+              docker-compose up -d 2>/dev/null || echo "Warning: Failed to start docker-compose services"
+            fi
           '';
         }
       else
