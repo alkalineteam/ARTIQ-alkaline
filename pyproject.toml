@@ -63,6 +63,7 @@ dependencies = [
     "scikit-learn",
     "influxdb-client",
     "toptica_lasersdk",
+    "pylablib",
 ]
 
 [project.license]
