@@ -550,11 +550,7 @@ include = ["qasync*"]
           ] ++ (with artiq.packages.${system}; [
             vivado
             openocd-bscanspi
-<<<<<<< HEAD
-          ]) ++ artiq.devShells.${system}.default.nativeBuildInputs;
-=======
           ]));
->>>>>>> nightly
 
           env = {
             # Use the uv2nix virtual environment (in /nix/store)
