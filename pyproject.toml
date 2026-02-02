@@ -62,6 +62,7 @@ dependencies = [
     "setuptools",
     "scikit-learn",
     "influxdb-client",
+    "toptica_lasersdk",
 ]
 
 [project.license]
@@ -84,7 +85,6 @@ index = "pytorch-cuda"
 [tool.uv.sources.ndscan]
 git = "https://github.com/alkalineteam/ndscan.git"
 branch = "setuptools-build"
-
 
 [tool.setuptools]
 zip-safe = false
