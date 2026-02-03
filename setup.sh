@@ -41,12 +41,17 @@ echo "{ allowUnfree = true; }" >> "$NIX_CONF2"
 # This allows nixGL to read /proc/driver/nvidia/version during builds
 SYSTEM_NIX_CONF="/etc/nix/nix.conf"
 if [ -f "$SYSTEM_NIX_CONF" ]; then
-    echo "⚙️  Configuring GPU auto-detection in $SYSTEM_NIX_CONF"
+    echo "⚙️  Configuring Nix in $SYSTEM_NIX_CONF"
     
-    # Add sandbox path for NVIDIA driver detection
-    if ! grep -q "extra-sandbox-paths.*=/proc/driver/nvidia" "$SYSTEM_NIX_CONF" 2>/dev/null; then
-        echo "   Adding /proc/driver/nvidia to sandbox-paths..."
-        echo "extra-sandbox-paths = /proc/driver/nvidia" | sudo tee -a "$SYSTEM_NIX_CONF" > /dev/null
+    # Add sandbox path for NVIDIA driver detection (only if NVIDIA driver is present)
+    if [ -d "/proc/driver/nvidia" ]; then
+        if ! grep -q "extra-sandbox-paths.*=/proc/driver/nvidia" "$SYSTEM_NIX_CONF" 2>/dev/null; then
+            echo "   Adding /proc/driver/nvidia to sandbox-paths..."
+            echo "extra-sandbox-paths = /proc/driver/nvidia" | sudo tee -a "$SYSTEM_NIX_CONF" > /dev/null
+        fi
+        echo "✅ NVIDIA GPU detected - sandbox paths configured"
+    else
+        echo "ℹ️  No NVIDIA GPU detected - skipping GPU sandbox configuration"
     fi
     
     # Add current user to trusted-users
