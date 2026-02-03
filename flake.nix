@@ -53,26 +53,39 @@
     };
     
     # nixGL packages for GPU acceleration
-    # NVIDIA driver version detection - use environment variable only to avoid 
-    # evaluation errors on machines without NVIDIA GPUs.
-    # To enable NVIDIA support, set NVIDIA_DRIVER_VERSION before running nix develop:
-    #   export NVIDIA_DRIVER_VERSION=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1)
-    #   nix develop --impure
+    # Auto-detect NVIDIA driver version from /proc (sandbox has access via extra-sandbox-paths)
     nvidiaDriverVersion = let
+      # Use runCommand to read /proc/driver/nvidia/version (works with sandbox-paths config)
+      versionFile = pkgs.runCommand "nvidia-version-detect" {
+        # Force rebuild on each evaluation to get fresh version
+        time = builtins.currentTime;
+        preferLocalBuild = true;
+        allowSubstitutes = false;
+      } ''
+        if [ -f /proc/driver/nvidia/version ]; then
+          # Extract version number (e.g., 590.48.01) from the file
+          grep -oP '\d+\.\d+\.\d+' /proc/driver/nvidia/version | head -1 > $out
+        else
+          echo "" > $out
+        fi
+      '';
+      detectedVersion = builtins.tryEval (pkgs.lib.strings.trim (builtins.readFile versionFile));
       envVersion = builtins.getEnv "NVIDIA_DRIVER_VERSION";
     in
-      if envVersion != "" then envVersion else null;
+      if detectedVersion.success && detectedVersion.value != "" then detectedVersion.value
+      else if envVersion != "" then envVersion
+      else null;
     hasNvidiaVersion = nvidiaDriverVersion != null;
     
-    # Import nixGL with explicitly detected version (only when NVIDIA version is set)
-    nixgl-base = if hasNvidiaVersion then import (nixgl + "/default.nix") {
+    # Import nixGL with explicitly detected version
+    nixgl-base = import (nixgl + "/default.nix") {
       inherit pkgs;
       nvidiaVersion = nvidiaDriverVersion;
       enable32bits = true;
-    } else null;
+    };
     
     # Expose the appropriate nixGL wrapper
-    nixgl-wrapper = if hasNvidiaVersion && nixgl-base != null then nixgl-base.nixGLNvidia else null;
+    nixgl-wrapper = if hasNvidiaVersion then nixgl-base.nixGLNvidia else null;
     hasNixGL = nixgl-wrapper != null;
 
     # Python version to use
