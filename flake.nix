@@ -54,9 +54,13 @@
     
     # nixGL packages for GPU acceleration
     # Auto-detect NVIDIA driver version from /proc (sandbox has access via extra-sandbox-paths)
+    # Check if NVIDIA driver path exists BEFORE trying to access it (fixes non-NVIDIA machines)
+    hasNvidiaProc = builtins.pathExists /proc/driver/nvidia;
+    
     nvidiaDriverVersion = let
       # Use runCommand to read /proc/driver/nvidia/version (works with sandbox-paths config)
-      versionFile = pkgs.runCommand "nvidia-version-detect" {
+      # Only create this derivation if the NVIDIA path exists
+      versionFile = if hasNvidiaProc then pkgs.runCommand "nvidia-version-detect" {
         # Force rebuild on each evaluation to get fresh version
         time = builtins.currentTime;
         preferLocalBuild = true;
@@ -68,8 +72,10 @@
         else
           echo "" > $out
         fi
-      '';
-      detectedVersion = builtins.tryEval (pkgs.lib.strings.trim (builtins.readFile versionFile));
+      '' else null;
+      detectedVersion = if versionFile != null 
+        then builtins.tryEval (pkgs.lib.strings.trim (builtins.readFile versionFile))
+        else { success = false; value = ""; };
       envVersion = builtins.getEnv "NVIDIA_DRIVER_VERSION";
     in
       if detectedVersion.success && detectedVersion.value != "" then detectedVersion.value
