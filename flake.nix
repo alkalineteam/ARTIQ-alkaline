@@ -346,7 +346,7 @@
         torchvision = fixCudaPackage "torchvision" (prev.torchvision or null);
       };
 
-    # Wheel-based PyQt6 overlay (disable auto-patchelf, keep runtime deps via env)
+    # Wheel-based PyQt overlay (disable auto-patchelf, keep runtime deps via env)
     pyqtFixOverlay = final: prev: {
       pyqt6 = if prev ? pyqt6 then prev.pyqt6.overrideAttrs (old: {
         dontAutoPatchelf = true;
@@ -362,6 +362,21 @@
           echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt6-qt6 (wheel RPATH)"
         '';
       }) else prev.pyqt6-qt6 or null;
+      # PyQt5 (used by pylablib)
+      pyqt5 = if prev ? pyqt5 then prev.pyqt5.overrideAttrs (old: {
+        dontAutoPatchelf = true;
+        propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [ final.pkgs.fontconfig final.pkgs.zstd ];
+        postInstall = (old.postInstall or "") + ''
+          echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt5 (wheel RPATH)"
+        '';
+      }) else prev.pyqt5 or null;
+      pyqt5-qt5 = if prev ? pyqt5-qt5 then prev.pyqt5-qt5.overrideAttrs (old: {
+        dontAutoPatchelf = true;
+        propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [ final.pkgs.fontconfig final.pkgs.zstd ];
+        postInstall = (old.postInstall or "") + ''
+          echo "[pyqtFixOverlay] Disabled auto-patchelf for pyqt5-qt5 (wheel RPATH)"
+        '';
+      }) else prev.pyqt5-qt5 or null;
     };
 
     # Helper scripts for forcing setuptools on selected packages
@@ -431,6 +446,14 @@ include = ["qasync*"]
       }) else prev.qasync or null;
     };
 
+    # Overlay to fix numba's libtbb dependency (needed by pylablib)
+    numbaFixOverlay = final: prev: {
+      numba = if prev ? numba then prev.numba.overrideAttrs (old: {
+        autoPatchelfIgnoreMissingDeps = (old.autoPatchelfIgnoreMissingDeps or []) ++ [ "libtbb.so.12" ];
+        buildInputs = (old.buildInputs or []) ++ [ pkgs.tbb ];
+      }) else prev.numba or null;
+    };
+
     # Construct Python package set with uv2nix if available
     pythonSet = if workspace != null then
       # uv2nix approach - create enhanced package set
@@ -443,6 +466,7 @@ include = ["qasync*"]
           cudaFixOverlay
           pyqtFixOverlay
           ndscanOitgOverlay
+          numbaFixOverlay
           # Ensure pythonparser (legacy setup.py, no pyproject) builds under uv2nix by injecting setuptools/wheel
           (final: prev: {
             pythonparser = if prev ? pythonparser then prev.pythonparser.overrideAttrs (old: {
@@ -450,6 +474,14 @@ include = ["qasync*"]
               buildInputs = (old.buildInputs or []) ++ [ final.python.pkgs.setuptools ];
               preBuild = (old.preBuild or "") + (bootstrap final "pythonparser");
             }) else prev.pythonparser or null;
+          })
+          # Ensure pyft232 (legacy setup.py, no pyproject) builds under uv2nix
+          (final: prev: {
+            pyft232 = if prev ? pyft232 then prev.pyft232.overrideAttrs (old: {
+              nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ final.python.pkgs.setuptools final.python.pkgs.wheel ];
+              buildInputs = (old.buildInputs or []) ++ [ final.python.pkgs.setuptools ];
+              preBuild = (old.preBuild or "") + (bootstrap final "pyft232");
+            }) else prev.pyft232 or null;
           })
           # Add ARTIQ and related packages
           (final: prev: {
@@ -541,6 +573,8 @@ include = ["qasync*"]
             # OpenGL libraries for non-NVIDIA (and fallback software rendering)
             pkgs.libglvnd
             pkgs.mesa
+            # Intel TBB needed by numba (for pylablib)
+            pkgs.tbb
             # nixGL for NVIDIA driver access (auto-detected with --impure)
             ] ++ (if hasNixGL then [ nixgl-wrapper ] else []) ++ [
             # Add docker-compose to packages
