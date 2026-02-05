@@ -16,20 +16,48 @@ class CoilStability(EnvExperiment):
         delay(100*ms)
 
         self.set_dataset("test.samples0", [0.0], broadcast=True, archive=True)
-        self.set_dataset("test.samples1", [0.0], broadcast=True, archive=True)
+        # self.set_dataset("test.samples1", [0.0], broadcast=True, archive=True)
+        # self.set_dataset("test.noise", [0.0], broadcast=True, archive=True)
+
+        self.ccb.issue("create_applet", 
+                        "Sampler0", 
+                        "${artiq_applet}plot_xy"
+                        " test.samples0"
+                        " --title sampler0",
+                        group = "test"
+                    )
         
-        self.ccb.issue("create_applet", "Sampler0", "${artiq_applet}plot_xy", " test.samples0", " --title samler0", group="test")
-        self.ccb.issue("create_applet", "Sampler1", "${artiq_applet}plot_xy", " test.samples1", " --title samler1", group="test")
+        # self.ccb.issue("create_applet", 
+        #                 "Sampler1", 
+        #                 "${artiq_applet}plot_xy"
+        #                 " test.samples1"
+        #                 " --title sampler1",
+        #                 group = "test"
+        #             )
+        
+        # self.ccb.issue("create_applet", 
+        #                 "Noise", 
+        #                 "${artiq_applet}plot_xy"
+        #                 " test.noise"
+        #                 " --title noise",
+        #                 group = "test"
+        #             )
 
         sampling_period = 1/self.sample_rate
-        data = [0.0] * 8 
+        data = [0.0] * 8
+        delay_in_mu = self.core.seconds_to_mu(sampling_period * s)
 
         for i in range(int(self.total_samples)):
-            self.core.break_realtime()
+            # t1 = self.core.get_rtio_counter_mu()
             self.sampler.sample(data)
-            self.append_to_dataset("test.samples0", data[0])
-            self.append_to_dataset("test.samples1", data[7])
             
-            print("Iteration:", i)
-
-            delay(sampling_period * s)       
+            with parallel:
+                delay_mu(delay_in_mu)
+                self.append_to_dataset("test.samples0", data[0])
+                # self.append_to_dataset("test.samples1", data[7])
+                # self.append_to_dataset("test.noise", data[1])
+            
+            # t2 = self.core.get_rtio_counter_mu()
+            # elapsed_time = self.core.mu_to_seconds(t2-t1)
+            # print(elapsed_time)
+            
