@@ -1,4 +1,12 @@
 from artiq.experiment import *
+from datetime import datetime
+import sys
+import os
+
+# Add scripts directory to path for MetricLogger import
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from scripts.Grafana.metric_logger import MetricLogger
+
 
 class CoilStability(EnvExperiment):
     def build(self):
@@ -7,6 +15,34 @@ class CoilStability(EnvExperiment):
         self.sampler = self.get_device("sampler0")
         self.setattr_argument("sample_rate", NumberValue(default=1))
         self.setattr_argument("total_samples", NumberValue(default=86400))
+        self.setattr_argument("log_to_grafana", BooleanValue(default=True))
+        
+        # Generate run_id for this experiment run
+        self.run_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.logger = None
+
+    def prepare(self):
+        """Initialize Grafana logger before kernel execution."""
+        if self.log_to_grafana:
+            self.logger = MetricLogger()
+            self.logger.__enter__()
+            print(f"Grafana logging enabled with run_id: {self.run_id}")
+
+    @rpc(flags={"async"})
+    def log_sample(self, value):
+        """RPC call to log sample to InfluxDB (non-blocking)."""
+        if self.logger:
+            self.logger.log_scalar(
+                "coil_samples",
+                value,
+                tags={"run_id": self.run_id, "channel": "0"}
+            )
+
+    def analyze(self):
+        """Cleanup after kernel execution."""
+        if self.logger:
+            self.logger.__exit__(None, None, None)
+            print(f"Grafana logging complete for run_id: {self.run_id}")
 
     @kernel
     def run(self):
@@ -54,6 +90,7 @@ class CoilStability(EnvExperiment):
             with parallel:
                 delay_mu(delay_in_mu)
                 self.append_to_dataset("test.samples0", data[0])
+                self.log_sample(data[0])  # Log to Grafana
                 # self.append_to_dataset("test.samples1", data[7])
                 # self.append_to_dataset("test.noise", data[1])
             
