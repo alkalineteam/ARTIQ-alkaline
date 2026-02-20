@@ -8,6 +8,7 @@ import seaborn
 import matplotlib
 import sklearn
 import requests
+import toptica.lasersdk.dlcpro.v2_0_3 as dlcpro
 # import boto3
 
 t1 = torch.randn(2, 2)
