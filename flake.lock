@@ -14,11 +14,11 @@
         "src-pythonparser": "src-pythonparser"
       },
       "locked": {
-        "lastModified": 1768981143,
-        "narHash": "sha256-RU/KV3Gula9bJ7TuNvsZhuf5IB+oGCDYE9QXMhn/o6A=",
+        "lastModified": 1770971752,
+        "narHash": "sha256-xxs+/DPzQoRRjIGnw9QA/PQKnhVSGpIz2H5xTGuSrAk=",
         "owner": "alkalineteam",
         "repo": "artiq",
-        "rev": "739b0660fe352a2429243739830c541228fa9ed8",
+        "rev": "1461cf90953ed9972c040b263e5a11c9ebc9e41a",
         "type": "github"
       },
       "original": {
@@ -122,11 +122,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1763384566,
-        "narHash": "sha256-r+wgI+WvNaSdxQmqaM58lVNvJYJ16zoq+tKN20cLst4=",
+        "lastModified": 1768908532,
+        "narHash": "sha256-HIdLXEFaUVE8FiaCPJbCfBMsnF+mVtDub8Jwj2BD+mk=",
         "owner": "nix-community",
         "repo": "naersk",
-        "rev": "d4155d6ebb70fbe2314959842f744aa7cabbbf6a",
+        "rev": "8d97452673640eb7fabe428e8b6a425bc355008b",
         "type": "github"
       },
       "original": {
@@ -291,11 +291,11 @@
     "src-migen": {
       "flake": false,
       "locked": {
-        "lastModified": 1767354910,
-        "narHash": "sha256-gRAvl5cUvrjq4t7htXsDBt4F8MEbHXFZoS0jbhrEs1I=",
+        "lastModified": 1768997857,
+        "narHash": "sha256-bdKQUQ3XLc4fV5sYBfKMuHuOS7nlF0ZU7rjWIKDzFzA=",
         "ref": "refs/heads/master",
-        "rev": "0efcff4cb875746dce46987d2fa476897c8c671e",
-        "revCount": 2064,
+        "rev": "44e5627d367c528b3ce5e686b6f305a9dfc56f2a",
+        "revCount": 2076,
         "type": "git",
         "url": "https://git.m-labs.hk/M-Labs/migen.git"
       },
