@@ -84,14 +84,16 @@
       enable32bits = true;
     };
     
-    # Expose the appropriate nixGL wrapper
+    # Expose the nixGL wrapper
     nixgl-wrapper = if hasNvidiaVersion then nixgl-base.nixGLNvidia else null;
     hasNixGL = nixgl-wrapper != null;
 
-    # Python version to use
+    # Python version
     python = pkgs.python313;
 
-    # Create wrapper scripts for uv add/remove that update pyproject.toml and rebuild
+    # Wrapper for uv add/remove: 
+    # updates pyproject.toml and loads that package to a new artiq environment
+    
     uvAddWrapper = pkgs.writeShellScriptBin "uv-add" ''
       if [ $# -eq 0 ]; then
         echo "Usage: uv-add <package1> [package2] [...]"
@@ -138,65 +140,6 @@
       
       echo "Rebuilding environment..."
       exec nix develop --impure
-    '';
-
-    # CUDA-enabled Python wrapper using nixGL (optional, not used by default)
-    nixglPythonWrapper = pkgs.writeShellScriptBin "python-cuda" ''
-      # Try different nixGL variants for NVIDIA
-      if command -v nixGL &> /dev/null; then
-        exec nixGL python "$@"
-      elif command -v nixGLNvidia &> /dev/null; then
-        exec nixGLNvidia python "$@"
-      elif command -v nixGLIntel &> /dev/null; then
-        echo "Warning: Only Intel GL found, CUDA may not work properly"
-        exec nixGLIntel python "$@"
-      else
-        echo ""
-        echo "=== nixGL Installation Required ==="
-        echo "To enable CUDA support, run this command in a separate terminal:"
-        echo ""
-        echo "  nix shell github:nix-community/nixGL#auto.nixGLNvidia --impure"
-        echo ""
-        echo "Then in that shell, run:"
-        echo "  nixGLNvidia python $*"
-        echo ""
-        echo "Alternatively, install nixGL permanently:"
-        echo "  nix profile install github:nix-community/nixGL#auto.nixGLNvidia --impure"
-        echo ""
-        echo "Running python without GPU access for now..."
-        exec python "$@"
-      fi
-    '';
-
-    # Generic nixGL wrapper for any CUDA application
-    cudaWrapper = pkgs.writeShellScriptBin "cuda-run" ''
-      if [ $# -eq 0 ]; then
-        echo "Usage: cuda-run <command> [args...]"
-        echo "Example: cuda-run python script.py"
-        echo "Example: cuda-run nvidia-smi"
-        exit 1
-      fi
-      
-      # Try different nixGL variants
-      if command -v nixGL &> /dev/null; then
-        exec nixGL "$@"
-      elif command -v nixGLNvidia &> /dev/null; then
-        exec nixGLNvidia "$@"
-      elif command -v nixGLIntel &> /dev/null; then
-        echo "Warning: Only Intel GL found, CUDA may not work properly"
-        exec nixGLIntel "$@"
-      else
-        echo ""
-        echo "nixGL not found! To enable CUDA support, install nixGL:"
-        echo "  nix profile install github:nix-community/nixGL#nixGLNvidia"
-        echo "  # or for current session:"
-        echo "  nix shell github:nix-community/nixGL#nixGLNvidia"
-        echo ""
-        echo "Then run: nixGLNvidia $*"
-        echo ""
-        echo "Running without GPU access..."
-        exec "$@"
-      fi
     '';
 
     uvRemoveWrapper = pkgs.writeShellScriptBin "uv-remove" ''
@@ -554,8 +497,8 @@ include = ["qasync*"]
             pkgs.git
             pkgs.jq
             pkgs.fd
-            # pkgs.rustc
-            # pkgs.cargo
+            pkgs.rustc
+            pkgs.cargo
             pkgs.llvm_15
             pkgs.lld_15
             pkgs.llvmPackages_15.clang-unwrapped
@@ -796,20 +739,6 @@ EOF
             echo "Nix environment: ${virtualenv}"
             echo "Python: $(which python3)"
             echo "$(artiq_master --version 2>/dev/null || echo 'available')"
-      # Optional OpenGL probe (set OPENGL_PROBE=1 before entering shell to enable)
-            if [ "''${OPENGL_PROBE:-0}" = "1" ]; then
-        python - <<'PY' 2>/dev/null || true
-import ctypes
-try:
-  ctypes.CDLL('libGL.so.1')
-  print('OpenGL: libGL.so.1 loaded')
-except OSError as e:
-  print('OpenGL: libGL.so.1 missing ->', e)
-PY
-      fi
-            if [ -z "$(ls ${pkgs.libglvnd}/lib/libGL.so.1 2>/dev/null)" ]; then
-              echo "(diagnostic) libGL.so.1 not present in libglvnd store path: ${pkgs.libglvnd}/lib" >&2
-            fi
 
             # Start Docker services
             if command -v docker-compose &> /dev/null; then
