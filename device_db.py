@@ -496,5 +496,13 @@ device_db["wavemeter"] = {
     "type": "controller",
     "host": "::1",
     "port": 3284,
-    "command": "python3 /home/artiq/ARTIQ-alkaline/highfinesse_config/aqctl_hf_wavemeter.py -p {port} --bind {bind}"
+    "command": "python3 /home/artiq/ARTIQ-alkaline/ndsp_config/aqctl_hf_wavemeter.py -p {port} --bind {bind}"
+}
+
+# Toptica DLC Pro 698nm laser (NDSP controller)
+device_db["toptica698"] = {
+    "type": "controller",
+    "host": "::1",
+    "port": 3285,
+    "command": "python3 /home/artiq/ARTIQ-alkaline/ndsp_config/aqctl_toptica698.py -p {port} --bind {bind} --ip 192.168.1.50"
 }
