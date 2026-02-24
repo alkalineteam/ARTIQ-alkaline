@@ -493,3 +493,11 @@ device_db["led2"] = {
     "class": "TTLOut",
     "arguments": {"channel": 0x000024}
 }
+
+# HighFinesse Wavemeter (NDSP controller)
+device_db["wavemeter"] = {
+    "type": "controller",
+    "host": "::1",
+    "port": 3284,
+    "command": "python3 /home/artiq/ARTIQ-alkaline/highfinesse_config/aqctl_hf_wavemeter.py -p {port} --bind {bind}"
+}
