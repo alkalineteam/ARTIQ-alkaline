@@ -20,7 +20,7 @@ classifiers = [
     "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
     "Operating System :: Linux",
 ]
-requires-python = ">=3.13"
+requires-python = "==3.13"
 dependencies = [
     "numpy",
     "scipy",
@@ -80,6 +80,7 @@ index-strategy = "unsafe-best-match"
 index = [
     { name = "pytorch-cuda", url = "https://download.pytorch.org/whl/cu129" },
 ]
+override-dependencies = ["markupsafe==3.0.2"]
 
 [tool.uv.sources.torch]
 index = "pytorch-cuda"

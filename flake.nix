@@ -244,6 +244,8 @@
           "libtorch_cuda.so"
           "libc10.so"
           "libc10_cuda.so"
+          # nvshmem (optional HPC transport, not needed)
+          "libnvshmem_host.so.3"
           # # FFmpeg libraries
           # "libavutil.so.56"
           # "libavutil.so.58"
@@ -279,6 +281,11 @@
         nvidia-nvjitlink-cu12 = fixCudaPackage "nvidia-nvjitlink-cu12" (prev.nvidia-nvjitlink-cu12 or null);
         nvidia-nvtx-cu12 = fixCudaPackage "nvidia-nvtx-cu12" (prev.nvidia-nvtx-cu12 or null);
         nvidia-cusparselt-cu12 = fixCudaPackage "nvidia-cusparselt-cu12" (prev.nvidia-cusparselt-cu12 or null);
+        nvidia-nvshmem-cu12 = if prev ? nvidia-nvshmem-cu12 then
+          prev.nvidia-nvshmem-cu12.overrideAttrs (old: {
+            dontAutoPatchelf = true;
+          })
+        else prev.nvidia-nvshmem-cu12 or null;
         # PyTorch and related packages
         torch = fixCudaPackage "torch" (prev.torch or null);
         torchaudio = if prev ? torchaudio then
@@ -740,10 +747,63 @@ EOF
             echo "Python: $(which python3)"
             echo "$(artiq_master --version 2>/dev/null || echo 'available')"
 
-            # Start Docker services
+            # Start Docker services (skip if already running)
+            if systemctl is-active --quiet docker 2>/dev/null; then
+              echo "Docker daemon already running"
+            else
+              echo "Starting Docker daemon..."
+              sudo systemctl start docker || echo "Warning: Failed to start docker daemon (sudo required)"
+            fi
             if command -v docker-compose &> /dev/null; then
-              echo "Starting Docker services..."
-              docker-compose up -d 2>/dev/null || echo "Warning: Failed to start docker-compose services"
+              docker-compose up -d 2>/dev/null || true
+            fi
+
+            # Start wavemeter NDSP controller
+            WM_SCRIPT="$REPO_ROOT/ndsp_config/aqctl_hf_wavemeter.py"
+            WM_PIDFILE="/tmp/aqctl_hf_wavemeter.pid"
+            if [ -f "$WM_SCRIPT" ]; then
+              if [ -f "$WM_PIDFILE" ] && kill -0 $(cat "$WM_PIDFILE") 2>/dev/null; then
+                echo "Wavemeter controller already running (PID $(cat $WM_PIDFILE))"
+              else
+                echo "Starting wavemeter NDSP controller..."
+                python3 "$WM_SCRIPT" -p 3284 --bind ::1 &
+                WM_PID=$!
+                echo $WM_PID > "$WM_PIDFILE"
+                disown $WM_PID
+                echo "Wavemeter controller PID: $WM_PID"
+              fi
+            fi
+
+            # Start Toptica DLC Pro NDSP controller
+            TP_SCRIPT="$REPO_ROOT/ndsp_config/aqctl_toptica698.py"
+            TP_PIDFILE="/tmp/aqctl_toptica.pid"
+            if [ -f "$TP_SCRIPT" ]; then
+              if [ -f "$TP_PIDFILE" ] && kill -0 $(cat "$TP_PIDFILE") 2>/dev/null; then
+                echo "Toptica698 controller already running (PID $(cat $TP_PIDFILE))"
+              else
+                echo "Starting Toptica 698 NDSP controller..."
+                python3 "$TP_SCRIPT" -p 3285 --bind ::1 --ip 192.168.1.50 &
+                TP_PID=$!
+                echo $TP_PID > "$TP_PIDFILE"
+                disown $TP_PID
+                echo "Toptica698 controller PID: $TP_PID"
+              fi
+            fi
+
+            # Start Toptica DLC Pro testbed689 NDSP controller
+            TB_SCRIPT="$REPO_ROOT/ndsp_config/aqctl_testbed689.py"
+            TB_PIDFILE="/tmp/aqctl_testbed689.pid"
+            if [ -f "$TB_SCRIPT" ]; then
+              if [ -f "$TB_PIDFILE" ] && kill -0 $(cat "$TB_PIDFILE") 2>/dev/null; then
+                echo "Testbed689 controller already running (PID $(cat $TB_PIDFILE))"
+              else
+                echo "Starting Testbed689 NDSP controller..."
+                python3 "$TB_SCRIPT" -p 3286 --bind ::1 --ip 172.29.13.247 &
+                TB_PID=$!
+                echo $TB_PID > "$TB_PIDFILE"
+                disown $TB_PID
+                echo "Testbed689 controller PID: $TB_PID"
+              fi
             fi
           '';
         }
