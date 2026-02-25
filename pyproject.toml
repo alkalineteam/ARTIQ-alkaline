@@ -64,6 +64,7 @@ dependencies = [
     "influxdb-client",
     "toptica_lasersdk",
     "pylablib",
+    "matplotlib",
 ]
 
 [project.license]
@@ -86,6 +87,10 @@ index = "pytorch-cuda"
 [tool.uv.sources.ndscan]
 git = "https://github.com/alkalineteam/ndscan.git"
 branch = "setuptools-build"
+
+[tool.uv.sources.artiq]
+git = "https://github.com/alkalineteam/artiq"
+branch = "master"
 
 [tool.setuptools]
 zip-safe = false
