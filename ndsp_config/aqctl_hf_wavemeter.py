@@ -590,7 +590,12 @@ class WavemeterController:
         count = wlmData.dll.GetPatternItemCount(int(index))
         if count <= 0:
             return []
-        array = (ctypes.c_int32 * count)()
+        # Use the correct item size — int16 for most wavemeters, int32 for some
+        item_size = wlmData.dll.GetPatternItemSize(int(index))
+        if item_size == 2:
+            array = (ctypes.c_int16 * count)()
+        else:
+            array = (ctypes.c_int32 * count)()
         result = wlmData.dll.GetPatternDataNum(int(channel), int(index), ctypes.cast(array, ctypes.c_void_p))
         if result < 0:
             return f"Error code: {result}"

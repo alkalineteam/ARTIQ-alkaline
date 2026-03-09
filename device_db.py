@@ -506,3 +506,11 @@ device_db["toptica698"] = {
     "port": 3285,
     "command": "python3 /home/artiq/ARTIQ-alkaline/ndsp_config/aqctl_toptica698.py -p {port} --bind {bind} --ip 192.168.1.50"
 }
+
+# Toptica DLC Pro testbed 689nm laser (NDSP controller)
+device_db["testbed689"] = {
+    "type": "controller",
+    "host": "::1",
+    "port": 3286,
+    "command": "python3 /home/artiq/ARTIQ-alkaline/ndsp_config/aqctl_testbed689.py -p {port} --bind {bind} --ip 172.29.13.247"
+}
