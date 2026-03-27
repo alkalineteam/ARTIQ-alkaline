@@ -61,4 +61,4 @@ class RF_on(EnvExperiment):
 
             self.Probe.set(frequency=self.Probe_Frequency * MHz, amplitude=self.Probe_Amplitude)
         print("weeewaaaweeewaaa")
-        asdkjasndjansdkjasndj
+        
