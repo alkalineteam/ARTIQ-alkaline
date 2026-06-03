@@ -509,3 +509,13 @@ device_db["toptica698"] = {
     "port": 3285,
     "command": "python3 /home/artiq/ARTIQ-alkaline/ndsp_config/aqctl_toptica698.py -p {port} --bind {bind} --ip 192.168.1.50"
 }
+
+# Andor sCMOS camera (SDK3) NDSP controller — runs on the Windows acquisition PC
+# (where the Andor SDK lives), reached over Ethernet. No "command": not launched
+# locally. Start it on Windows with:  python aqctl_andor.py -p 3287 --bind 0.0.0.0
+# (or anywhere with --simulation and host "::1" for hardware-free testing).
+device_db["andor"] = {
+    "type": "controller",
+    "host": "192.168.1.100",  # TODO: set to the Windows PC's IP on the lab network
+    "port": 3287,
+}
