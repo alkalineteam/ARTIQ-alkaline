@@ -1,14 +1,13 @@
 # Python dependencies for the Andor SDK3 NDSP controller.
 # Install into a venv (see README):  pip install -r requirements.txt
 #
+# NOTE: sipyco is NOT on PyPI — it installs from m-labs' GitHub, so this needs
+# `git` available on PATH (Git for Windows). numpy and pylablib are from PyPI.
+#
 # For REAL hardware you ALSO need the Andor SDK3 runtime (atcore DLLs), installed
 # separately via Andor Solis or the standalone SDK3 installer. The --simulation
 # mode requires none of that.
 
-sipyco
+sipyco @ git+https://github.com/m-labs/sipyco
 numpy
 pylablib
-
-# If PyPI's sipyco is older than the ARTIQ master you connect to (sipyco 1.10)
-# and you hit an RPC incompatibility, pin it to the same source instead:
-#   pip install "git+https://github.com/m-labs/sipyco"

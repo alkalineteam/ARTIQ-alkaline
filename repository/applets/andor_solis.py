@@ -3,7 +3,7 @@
 Andor "Solis-style" camera applet for the ARTIQ dashboard.
 
 A live image viewer + control panel that talks directly to the Andor NDSP
-controller (``ndsp_config/aqctl_andor.py``) over sipyco RPC. It provides:
+controller (``andor-ndsp/aqctl_andor.py``) over sipyco RPC. It provides:
 
   * live streaming view (pyqtgraph ImageView: histogram, colormap/LUT, zoom, ROI)
   * single-shot Snap
