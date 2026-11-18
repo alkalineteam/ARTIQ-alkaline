@@ -277,8 +277,7 @@ device_db["urukul0_ch0"] = {
     "module": "artiq.coredevice.ad9912",
     "class": "AD9912",
     "arguments": {
-        "pll_n": 8,
-        "pll_en": 1,
+        "pll_en": True,
         "chip_select": 4,
         "cpld_device": "urukul0_cpld",
         "sw_device": "ttl_urukul0_sw0"
@@ -290,8 +289,7 @@ device_db["urukul0_ch1"] = {
     "module": "artiq.coredevice.ad9912",
     "class": "AD9912",
     "arguments": {
-        "pll_n": 8,
-        "pll_en": 1,
+        "pll_en": True,
         "chip_select": 5,
         "cpld_device": "urukul0_cpld",
         "sw_device": "ttl_urukul0_sw1"
@@ -303,8 +301,7 @@ device_db["urukul0_ch2"] = {
     "module": "artiq.coredevice.ad9912",
     "class": "AD9912",
     "arguments": {
-        "pll_n": 8,
-        "pll_en": 1,
+        "pll_en": True,
         "chip_select": 6,
         "cpld_device": "urukul0_cpld",
         "sw_device": "ttl_urukul0_sw2"
@@ -316,8 +313,7 @@ device_db["urukul0_ch3"] = {
     "module": "artiq.coredevice.ad9912",
     "class": "AD9912",
     "arguments": {
-        "pll_n": 8,
-        "pll_en": 1,
+        "pll_en": True,
         "chip_select": 7,
         "cpld_device": "urukul0_cpld",
         "sw_device": "ttl_urukul0_sw3"
@@ -396,8 +392,7 @@ device_db["urukul1_ch0"] = {
     "module": "artiq.coredevice.ad9910",
     "class": "AD9910",
     "arguments": {
-        "pll_n": 32,
-        "pll_en": 1,
+        "pll_en": True,
         "chip_select": 4,
         "cpld_device": "urukul1_cpld",
         "sw_device": "ttl_urukul1_sw0"
@@ -409,8 +404,7 @@ device_db["urukul1_ch1"] = {
     "module": "artiq.coredevice.ad9910",
     "class": "AD9910",
     "arguments": {
-        "pll_n": 32,
-        "pll_en": 1,
+        "pll_en": True,
         "chip_select": 5,
         "cpld_device": "urukul1_cpld",
         "sw_device": "ttl_urukul1_sw1"
@@ -422,8 +416,7 @@ device_db["urukul1_ch2"] = {
     "module": "artiq.coredevice.ad9910",
     "class": "AD9910",
     "arguments": {
-        "pll_n": 32,
-        "pll_en": 1,
+        "pll_en": True,
         "chip_select": 6,
         "cpld_device": "urukul1_cpld",
         "sw_device": "ttl_urukul1_sw2"
@@ -435,8 +428,7 @@ device_db["urukul1_ch3"] = {
     "module": "artiq.coredevice.ad9910",
     "class": "AD9910",
     "arguments": {
-        "pll_n": 32,
-        "pll_en": 1,
+        "pll_en": True,
         "chip_select": 7,
         "cpld_device": "urukul1_cpld",
         "sw_device": "ttl_urukul1_sw3"
@@ -501,10 +493,35 @@ device_db["wavemeter"] = {
     "command": "python3 /home/artiq/ARTIQ-alkaline/ndsp_config/aqctl_hf_wavemeter.py -p {port} --bind {bind}"
 }
 
-# Toptica DLC Pro 698nm laser (NDSP controller)
-device_db["toptica698"] = {
+# TEMPORARILY DISABLED: 698nm and 689nm lasers disconnected (uncomment to re-enable)
+# # Toptica DLC Pro 698nm laser (NDSP controller)
+# device_db["toptica698"] = {
+#     "type": "controller",
+#     "host": "::1",
+#     "port": 3285,
+#     "command": "python3 /home/artiq/ARTIQ-alkaline/ndsp_config/aqctl_toptica698.py -p {port} --bind {bind} --ip 192.168.1.50"
+# }
+
+# Toptica DLC Pro 461nm blue MOT laser (NDSP controller)
+device_db["bmot461"] = {
     "type": "controller",
     "host": "::1",
-    "port": 3285,
-    "command": "python3 /home/artiq/ARTIQ-alkaline/ndsp_config/aqctl_toptica698.py -p {port} --bind {bind} --ip 192.168.1.50"
+    "port": 3288,
+    "command": "python3 /home/artiq/ARTIQ-alkaline/ndsp_config/aqctl_bmot461.py -p {port} --bind {bind} --ip 172.29.13.62"
+}
+
+# Toptica DLC Pro 461nm Zeeman slower laser (NDSP controller)
+device_db["zeeman461"] = {
+    "type": "controller",
+    "host": "::1",
+    "port": 3289,
+    "command": "python3 /home/artiq/ARTIQ-alkaline/ndsp_config/aqctl_zeeman461.py -p {port} --bind {bind} --ip 172.29.13.225"
+}
+
+# Rohde & Schwarz HMP4040 power supply (NDSP controller, SCPI over LAN)
+device_db["hmp4040"] = {
+    "type": "controller",
+    "host": "::1",
+    "port": 3290,
+    "command": "python3 /home/artiq/ARTIQ-alkaline/ndsp_config/aqctl_hmp4040.py -p {port} --bind {bind} --ip 172.29.13.241"
 }
