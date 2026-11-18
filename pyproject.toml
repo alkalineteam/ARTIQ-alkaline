@@ -20,7 +20,7 @@ classifiers = [
     "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
     "Operating System :: Linux",
 ]
-requires-python = "==3.13"
+requires-python = ">=3.14,<3.15"
 dependencies = [
     "numpy",
     "scipy",
@@ -56,15 +56,16 @@ dependencies = [
     "torchvision",
     "seaborn",
     "AllenTools",
-    "ndscan",
-    "pythonparser",
-    "python-Levenshtein",
     "setuptools",
     "scikit-learn",
     "influxdb-client",
     "toptica_lasersdk",
     "pylablib",
     "matplotlib",
+    # ARTIQ-10 runtime dependencies (provided by the ARTIQ flake upstream)
+    "pygit2",
+    "pyqt6",
+    "qasync",
 ]
 
 [project.license]
@@ -78,20 +79,16 @@ Fork = "https://github.com/alkalineteam/ARTIQ-alkaline-fork"
 [tool.uv]
 index-strategy = "unsafe-best-match"
 index = [
-    { name = "pytorch-cuda", url = "https://download.pytorch.org/whl/cu129" },
+    # explicit: only packages pinned to this index below are taken from it
+    { name = "pytorch-cuda", url = "https://download.pytorch.org/whl/cu129", explicit = true },
 ]
-override-dependencies = ["markupsafe==3.0.2"]
+override-dependencies = ["markupsafe==3.0.3"]
 
 [tool.uv.sources.torch]
 index = "pytorch-cuda"
 
-[tool.uv.sources.ndscan]
-git = "https://github.com/alkalineteam/ndscan.git"
-branch = "setuptools-build"
-
-[tool.uv.sources.artiq]
-git = "https://github.com/alkalineteam/artiq"
-branch = "master"
+[tool.uv.sources.torchvision]
+index = "pytorch-cuda"
 
 [tool.setuptools]
 zip-safe = false
@@ -113,7 +110,7 @@ artiq_fork = [
 [tool.black]
 line-length = 88
 target-version = [
-    "py313",
+    "py314",
 ]
 include = "\\.pyi?$"
 exclude = "/(\n    \\.eggs\n  | \\.git\n  | \\.hg\n  | \\.mypy_cache\n  | \\.tox\n  | \\.venv\n  | _build\n  | buck-out\n  | build\n  | dist\n)/\n"
@@ -130,7 +127,7 @@ python_files = [
 ]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

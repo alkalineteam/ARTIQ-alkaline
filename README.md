@@ -1,12 +1,12 @@
 ## ARTIQ Alkaline Fork
 
-Custom ARTIQ fork with a reproducible Nix + uv2nix Python 3.13 environment, CUDA / PyTorch support, and convenience wrappers for dependency management.
+Custom ARTIQ fork with a reproducible Nix + uv2nix Python 3.14 environment for ARTIQ-10 (NAC3 compiler), CUDA / PyTorch support, and convenience wrappers for dependency management.
 
 ## Key Features
 
 - Upstream ARTIQ flake consumed directly (inherits core packages: artiq, migen, misoc, asyncserial, microscope, sipyco)
 - uv / uv2nix driven Python dependency locking (pure wheels sourced into the Nix store)
-- Python 3.13 toolchain (overrideable) with scientific stack (numpy, scipy, h5py, sympy, astropy, plotting libs, sklearn)
+- Python 3.14 toolchain (pinned to the interpreter ARTIQ/NAC3 is built with) with scientific stack (numpy, scipy, h5py, sympy, astropy, plotting libs, sklearn)
 - PyTorch + CUDA (cu129 wheels) with automatic nixGL GPU wrapper detection
 - Automatic wheel hash repair (`fix-hashes.sh`) for PyTorch CUDA wheels (works around missing hash / % encoding issues in `uv.lock`)
 - Wrapper commands: `uv-add` and `uv-remove` (atomic edit -> lock -> hash-fix -> rebuild cycle)

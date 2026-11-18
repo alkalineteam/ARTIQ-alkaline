@@ -1,6 +1,7 @@
 import torch
 from torch import version as torch_version
-from ndscan.experiment import Fragment
+import artiq
+import nac3artiq
 import torchvision
 # import torchaudio
 import pandas as pd

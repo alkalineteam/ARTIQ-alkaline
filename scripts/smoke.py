@@ -5,10 +5,10 @@ Run inside the nix develop shell:
     python scripts/smoke.py
 
 Checks performed:
-  - Imports and versions of core packages (artiq, torch, ndscan, oitg, qasync)
+  - Imports and versions of core packages (artiq, nac3artiq, torch, qasync)
   - CUDA availability and simple GPU tensor operation
   - qasync + PyQt6 minimal event loop (offscreen) coroutine execution
-  - ndscan basic attribute presence (sanity heuristic)
+  - ARTIQ major version is 10 (NAC3 compiler)
   - Environment variable sanity (VIRTUAL_ENV, PYTHONPATH not manually polluted)
 
 Exits non‑zero on any failure. Designed to be fast (<1s if GPU warm).
@@ -49,8 +49,7 @@ def import_and_version():
     packages = [
         ("artiq", "__version__"),
         ("torch", "__version__"),
-        ("ndscan", "__version__"),
-        ("oitg", None),
+        ("nac3artiq", None),
         ("qasync", None),
     ("sipyco", "__version__"),
     ]
@@ -86,13 +85,13 @@ def cuda_test():
     except Exception as e:
         record("cuda:op", False, repr(e))
 
-def ndscan_basic():
+def artiq_major():
     try:
-        nd = importlib.import_module("ndscan")
-        ok = hasattr(nd, "__version__") or hasattr(nd, "scan")
-        record("ndscan:attr", ok, "has version or scan")
+        artiq = importlib.import_module("artiq")
+        ok = artiq.__version__.split(".")[0] == "10"
+        record("artiq:major", ok, artiq.__version__)
     except Exception as e:
-        record("ndscan:attr", False, repr(e))
+        record("artiq:major", False, repr(e))
 
 def qasync_event_loop():
     # Use offscreen platform to avoid real display requirement.
@@ -106,10 +105,11 @@ def qasync_event_loop():
         async def tiny():
             await asyncio.sleep(0.01)
             return 42
+        # Same pattern as artiq_dashboard (a `with loop:` block hangs with qasync 0.28)
         loop = qasync.QEventLoop(app)
         asyncio.set_event_loop(loop)
-        with loop:
-            val = loop.run_until_complete(tiny())
+        val = loop.run_until_complete(tiny())
+        loop.close()
         record("qasync:eventloop", val == 42, f"result={val}")
     except Exception as e:
         record("qasync:eventloop", False, repr(e))
@@ -200,7 +200,7 @@ def summarize():
 def main():
     import_and_version()
     cuda_test()
-    ndscan_basic()
+    artiq_major()
     qasync_event_loop()
     env_checks()
     artiq_cli()

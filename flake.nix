@@ -2,14 +2,15 @@
   description = "ARTIQ for alkaline team @ University of Birmingham";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # Use the same nixpkgs as ARTIQ/NAC3 so the venv python is the exact
+    # interpreter nac3artiq was built against
+    nixpkgs.follows = "artiq/nac3/nixpkgs";
 
-    # ARTIQ
+    # ARTIQ-10 (NAC3 compiler)
     artiq = {
       # url = "github:alkalineteam/ARTIQ-alkaline-fork/master"; #Obsolete
       # url = "github:m-labs/artiq/master"; #Obsolete
       url = "github:alkalineteam/artiq/master";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     # uv2nix inputs for Python dependency management
@@ -32,9 +33,12 @@
     };
 
     # nixGL for GPU support
+    # nixGL does not build against ARTIQ's newer nixpkgs (nvidia-x11 `kernel` argument),
+    # so it gets its own nixpkgs. It only wraps the host NVIDIA driver, so no ABI coupling.
+    nixpkgs-nixgl.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixgl = {
       url = "github:nix-community/nixGL";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs.follows = "nixpkgs-nixgl";
     };
   };
 
@@ -45,10 +49,14 @@
     pyproject-nix,
     uv2nix,
     pyproject-build-systems,
+    nixpkgs-nixgl,
     nixgl,
   }: let
     system = "x86_64-linux";
     pkgs = import nixpkgs {
+      inherit system;
+    };
+    pkgs-nixgl = import nixpkgs-nixgl {
       inherit system;
     };
     
@@ -79,7 +87,7 @@
     
     # Import nixGL with explicitly detected version
     nixgl-base = import (nixgl + "/default.nix") {
-      inherit pkgs;
+      pkgs = pkgs-nixgl;
       nvidiaVersion = nvidiaDriverVersion;
       enable32bits = true;
     };
@@ -88,8 +96,8 @@
     nixgl-wrapper = if hasNvidiaVersion then nixgl-base.nixGLNvidia else null;
     hasNixGL = nixgl-wrapper != null;
 
-    # Python version
-    python = pkgs.python313;
+    # Python version - must match the python3 ARTIQ/NAC3 is built with (3.14)
+    python = pkgs.python3;
 
     # Wrapper for uv add/remove: 
     # updates pyproject.toml and loads that package to a new artiq environment
@@ -417,14 +425,6 @@ include = ["qasync*"]
           pyqtFixOverlay
           ndscanOitgOverlay
           numbaFixOverlay
-          # Ensure pythonparser (legacy setup.py, no pyproject) builds under uv2nix by injecting setuptools/wheel
-          (final: prev: {
-            pythonparser = if prev ? pythonparser then prev.pythonparser.overrideAttrs (old: {
-              nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ final.python.pkgs.setuptools final.python.pkgs.wheel ];
-              buildInputs = (old.buildInputs or []) ++ [ final.python.pkgs.setuptools ];
-              preBuild = (old.preBuild or "") + (bootstrap final "pythonparser");
-            }) else prev.pythonparser or null;
-          })
           # Ensure pyft232 (legacy setup.py, no pyproject) builds under uv2nix
           (final: prev: {
             pyft232 = if prev ? pyft232 then prev.pyft232.overrideAttrs (old: {
@@ -433,10 +433,19 @@ include = ["qasync*"]
               preBuild = (old.preBuild or "") + (bootstrap final "pyft232");
             }) else prev.pyft232 or null;
           })
+          # pylablib is sdist-only and does not declare setuptools as a build dependency
+          (final: prev: {
+            pylablib = if prev ? pylablib then prev.pylablib.overrideAttrs (old: {
+              nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ final.python.pkgs.setuptools final.python.pkgs.wheel ];
+              preBuild = (old.preBuild or "") + (bootstrap final "pylablib");
+            }) else prev.pylablib or null;
+          })
           # Add ARTIQ and related packages
           (final: prev: {
             # Just inherit ARTIQ directly - this is simpler and more reliable
             artiq = artiq.packages.${system}.artiq.overrideAttrs (old: {
+              # dashboard: keep the last-clicked quickstyle button highlighted (used by oven_control)
+              patches = (old.patches or []) ++ [ ./patches/artiq-quickstyle-highlight.patch ];
               doCheck = false;
               doInstallCheck = false;
               checkPhase = "true";
@@ -498,17 +507,12 @@ include = ["qasync*"]
             pkgs.uv
             uvAddWrapper
             uvRemoveWrapper
-            # llvmlite needed when invoking ARTIQ frontends via virtualenv python
-            python.pkgs.llvmlite
             # Include essential ARTIQ development tools
             pkgs.git
             pkgs.jq
             pkgs.fd
             pkgs.rustc
             pkgs.cargo
-            pkgs.llvm_15
-            pkgs.lld_15
-            pkgs.llvmPackages_15.clang-unwrapped
             pkgs.stdenv.cc.cc.lib
             # RDMA/InfiniBand libraries for CUDA packages
             pkgs.rdma-core
@@ -545,6 +549,8 @@ include = ["qasync*"]
             # Inherit ARTIQ-specific environment variables
             QT_PLUGIN_PATH = artiq.qtPaths.QT_PLUGIN_PATH or "";
             QML2_IMPORT_PATH = artiq.qtPaths.QML2_IMPORT_PATH or "";
+            # pylablib pulls in PyQt5; without this qasync (and so ARTIQ applets) picks PyQt5 over PyQt6
+            QT_API = "pyqt6";
           };
 
           shellHook = ''
@@ -572,27 +578,16 @@ include = ["qasync*"]
             export PYTHONPATH="${editablePythonSet.asyncserial}/${python.sitePackages}:$PYTHONPATH"
             export PYTHONPATH="${editablePythonSet.microscope}/${python.sitePackages}:$PYTHONPATH"
             export PYTHONPATH="${editablePythonSet.sipyco}/${python.sitePackages}:$PYTHONPATH"
-            # Ensure llvmlite (from nixpkgs) is on PYTHONPATH for ARTIQ JIT components
-            if [ -d "${python.pkgs.llvmlite}/${python.sitePackages}" ]; then
-              export PYTHONPATH="${python.pkgs.llvmlite}/${python.sitePackages}:$PYTHONPATH"
-            fi
-            # Dynamically add pythonparser (needed by ARTIQ core compiler) if present in ARTIQ store closure
-            if command -v artiq_run >/dev/null 2>&1; then
-              _ARTIQ_BIN=$(command -v artiq_run)
-              if [ -n "$_ARTIQ_BIN" ]; then
-                _ARTIQ_ROOT=$(dirname $(dirname "$_ARTIQ_BIN"))
-                for sp in "$_ARTIQ_ROOT"/lib/python*/site-packages; do
-                  if [ -d "$sp/pythonparser" ]; then
-                    export PYTHONPATH="$sp:$PYTHONPATH"
-                    break
-                  fi
-                done
-              fi
-            fi
-            
+            # NAC3 compiler module and artiq-comtools (ARTIQ-10 runtime dependencies)
+            export PYTHONPATH="${artiq.inputs.nac3.packages.${system}.nac3artiq-pgo}/${python.sitePackages}:$PYTHONPATH"
+            export PYTHONPATH="${artiq.inputs.artiq-comtools.packages.${system}.artiq-comtools}/${python.sitePackages}:$PYTHONPATH"
+            # Nix PyQt6 ahead of the pip wheel: it is built against the same Qt as QT_PLUGIN_PATH, so the
+            # GTK platform theme loads and the dashboard follows the desktop theme (as in ~/artiq)
+            export PYTHONPATH="${python.withPackages (ps: [ ps.pyqt6 ])}/${python.sitePackages}:$PYTHONPATH"
+
             # Provide wheel runtime libs for PyQt6/qasync
             # Ensure zstd library is available
-            export LD_LIBRARY_PATH="${pkgs.zstd.out}/lib:${pkgs.fontconfig.lib or pkgs.fontconfig}/lib:${pkgs.freetype.out}/lib:${pkgs.libpng}/lib:${pkgs.libjpeg}/lib:${pkgs.dbus.lib or pkgs.dbus}/lib:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:${pkgs.glib.out}/lib:${pkgs.libxkbcommon}/lib:${pkgs.alsa-lib}/lib:${pkgs.xorg.libX11}/lib:${pkgs.xorg.libXext}/lib:${pkgs.xorg.libXrender}/lib:${pkgs.xorg.libxcb}/lib:${pkgs.xorg.libXi}/lib:${pkgs.xorg.libXfixes}/lib:${pkgs.xorg.libXcursor}/lib:${pkgs.xorg.libXrandr}/lib:${pkgs.xorg.libXdamage}/lib:${pkgs.xorg.libXcomposite}/lib:${pkgs.xorg.libXau}/lib:${pkgs.xorg.libXdmcp}/lib:${pkgs.xorg.libXtst}/lib:${pkgs.libglvnd}/lib:${pkgs.mesa}/lib:$LD_LIBRARY_PATH"
+            export LD_LIBRARY_PATH="${pkgs.zstd.out}/lib:${pkgs.fontconfig.lib or pkgs.fontconfig}/lib:${pkgs.freetype.out}/lib:${pkgs.libpng}/lib:${pkgs.libjpeg}/lib:${pkgs.dbus.lib or pkgs.dbus}/lib:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.rdma-core}/lib:${pkgs.glib.out}/lib:${pkgs.libxkbcommon}/lib:${pkgs.alsa-lib}/lib:${pkgs.xorg.libX11}/lib:${pkgs.xorg.libXext}/lib:${pkgs.xorg.libXrender}/lib:${pkgs.xorg.libxcb}/lib:${pkgs.xorg.xcbutilcursor}/lib:${pkgs.xorg.xcbutilwm}/lib:${pkgs.xorg.xcbutilimage}/lib:${pkgs.xorg.xcbutilkeysyms}/lib:${pkgs.xorg.xcbutilrenderutil}/lib:${pkgs.xorg.xcbutil}/lib:${pkgs.xorg.libXi}/lib:${pkgs.xorg.libXfixes}/lib:${pkgs.xorg.libXcursor}/lib:${pkgs.xorg.libXrandr}/lib:${pkgs.xorg.libXdamage}/lib:${pkgs.xorg.libXcomposite}/lib:${pkgs.xorg.libXau}/lib:${pkgs.xorg.libXdmcp}/lib:${pkgs.xorg.libXtst}/lib:${pkgs.libglvnd}/lib:${pkgs.mesa}/lib:$LD_LIBRARY_PATH"
             # Provide DRI drivers for Mesa (software / non-NVIDIA rendering)
             if [ -d "${pkgs.mesa}/lib/dri" ]; then
               export LIBGL_DRIVERS_PATH="${pkgs.mesa}/lib/dri"

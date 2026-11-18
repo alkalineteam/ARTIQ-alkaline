@@ -1,0 +1,19 @@
+diff --git a/artiq/gui/entries.py b/artiq/gui/entries.py
+index 8ed741280..1d538fb55 100644
+--- a/artiq/gui/entries.py
++++ b/artiq/gui/entries.py
+@@ -236,9 +236,14 @@ class EnumerationEntry(QtWidgets.QWidget):
+         procdesc = argument["desc"]
+         choices = procdesc["choices"]
+         if procdesc["quickstyle"]:
++            # checkable buttons in an exclusive group keep the last-clicked choice highlighted
+             self.btn_group = QtWidgets.QButtonGroup()
+             for i, choice in enumerate(choices):
+                 button = QtWidgets.QPushButton(choice)
++                button.setCheckable(True)
++                button.setChecked(choice == argument["state"])
++                button.setStyleSheet("QPushButton:checked { background-color: palette(highlight);"
++                                     " color: palette(highlighted-text); font-weight: bold; }")
+                 self.btn_group.addButton(button)
+                 self.btn_group.setId(button, i)
+                 layout.addWidget(button)
