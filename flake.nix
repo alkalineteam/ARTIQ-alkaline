@@ -753,73 +753,34 @@ EOF
               docker-compose up -d 2>/dev/null || true
             fi
 
-            # Start wavemeter NDSP controller
-            WM_SCRIPT="$REPO_ROOT/ndsp_config/aqctl_hf_wavemeter.py"
-            WM_PIDFILE="/tmp/aqctl_hf_wavemeter.pid"
-            if [ -f "$WM_SCRIPT" ]; then
-              if [ -f "$WM_PIDFILE" ] && kill -0 $(cat "$WM_PIDFILE") 2>/dev/null; then
-                echo "Wavemeter controller already running (PID $(cat $WM_PIDFILE))"
-              else
-                echo "Starting wavemeter NDSP controller..."
-                python3 "$WM_SCRIPT" -p 3284 --bind ::1 &
-                WM_PID=$!
-                echo $WM_PID > "$WM_PIDFILE"
-                disown $WM_PID
-                echo "Wavemeter controller PID: $WM_PID"
-              fi
-            fi
-
-            # TEMPORARILY DISABLED: 698nm and 689nm lasers disconnected (uncomment to re-enable)
-            # # Start Toptica DLC Pro NDSP controller
-            # TP_SCRIPT="$REPO_ROOT/ndsp_config/aqctl_toptica698.py"
-            # TP_PIDFILE="/tmp/aqctl_toptica.pid"
-            # if [ -f "$TP_SCRIPT" ]; then
-              # if [ -f "$TP_PIDFILE" ] && kill -0 $(cat "$TP_PIDFILE") 2>/dev/null; then
-                # echo "Toptica698 controller already running (PID $(cat $TP_PIDFILE))"
-              # else
-                # echo "Starting Toptica 698 NDSP controller..."
-                # python3 "$TP_SCRIPT" -p 3285 --bind ::1 --ip 192.168.1.50 &
-                # TP_PID=$!
-                # echo $TP_PID > "$TP_PIDFILE"
-                # disown $TP_PID
-                # echo "Toptica698 controller PID: $TP_PID"
-              # fi
-            # fi
-
-            # # Start Toptica DLC Pro testbed689 NDSP controller
-            # TB_SCRIPT="$REPO_ROOT/ndsp_config/aqctl_testbed689.py"
-            # TB_PIDFILE="/tmp/aqctl_testbed689.pid"
-            # if [ -f "$TB_SCRIPT" ]; then
-              # if [ -f "$TB_PIDFILE" ] && kill -0 $(cat "$TB_PIDFILE") 2>/dev/null; then
-                # echo "Testbed689 controller already running (PID $(cat $TB_PIDFILE))"
-              # else
-                # echo "Starting Testbed689 NDSP controller..."
-                # python3 "$TB_SCRIPT" -p 3286 --bind ::1 --ip 172.29.13.247 &
-                # TB_PID=$!
-                # echo $TB_PID > "$TB_PIDFILE"
-                # disown $TB_PID
-                # echo "Testbed689 controller PID: $TB_PID"
-              # fi
-            # fi
-
-            # Start Toptica DLC Pro 461nm blue MOT and Zeeman slower, and R&S HMP4040 PSU NDSP controllers
-            for spec in "bmot461:3288:172.29.13.62" "zeeman461:3289:172.29.13.225" "hmp4040:3290:172.29.13.241"; do
-              IFS=: read -r LNAME LPORT LIP <<< "$spec"
-              L_SCRIPT="$REPO_ROOT/ndsp_config/aqctl_$LNAME.py"
-              L_PIDFILE="/tmp/aqctl_$LNAME.pid"
-              if [ -f "$L_SCRIPT" ]; then
-                if [ -f "$L_PIDFILE" ] && kill -0 $(cat "$L_PIDFILE") 2>/dev/null; then
-                  echo "$LNAME controller already running (PID $(cat $L_PIDFILE))"
-                else
-                  echo "Starting $LNAME NDSP controller..."
-                  python3 "$L_SCRIPT" -p "$LPORT" --bind ::1 --ip "$LIP" &
-                  L_PID=$!
-                  echo $L_PID > "$L_PIDFILE"
-                  disown $L_PID
-                  echo "$LNAME controller PID: $L_PID"
+            # Start this experiment's NDSP controllers. Set ARTIQ_NO_CONTROLLERS=1 to skip them,
+            # e.g. on a laptop that should not talk to the lab hardware.
+            # Each entry is name:port:ip and starts ndsp_config/aqctl_<name>.py; the IP must
+            # match the one in device_db.py.
+            SM18220_IP="TODO"  # Delta Elektronika SM18-220 PSU: set its IP here and in device_db.py
+            if [ -n "$ARTIQ_NO_CONTROLLERS" ]; then
+              echo "ARTIQ_NO_CONTROLLERS is set: not starting NDSP controllers"
+            else
+              for spec in "sm18220:3291:$SM18220_IP"; do
+                IFS=: read -r LNAME LPORT LIP <<< "$spec"
+                L_SCRIPT="$REPO_ROOT/ndsp_config/aqctl_$LNAME.py"
+                L_PIDFILE="/tmp/aqctl_$LNAME.pid"
+                if [ "$LIP" = "TODO" ]; then
+                  echo "$LNAME: IP not set in flake.nix, controller not started"
+                elif [ -f "$L_SCRIPT" ]; then
+                  if [ -f "$L_PIDFILE" ] && kill -0 $(cat "$L_PIDFILE") 2>/dev/null; then
+                    echo "$LNAME controller already running (PID $(cat $L_PIDFILE))"
+                  else
+                    echo "Starting $LNAME NDSP controller..."
+                    python3 "$L_SCRIPT" -p "$LPORT" --bind ::1 --ip "$LIP" &
+                    L_PID=$!
+                    echo $L_PID > "$L_PIDFILE"
+                    disown $L_PID
+                    echo "$LNAME controller PID: $L_PID"
+                  fi
                 fi
-              fi
-            done
+              done
+            fi
           '';
         }
       else
