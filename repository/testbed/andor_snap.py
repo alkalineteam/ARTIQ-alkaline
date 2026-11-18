@@ -1,4 +1,6 @@
 from artiq.experiment import *
+import os
+import sys
 
 
 class AndorSnap(EnvExperiment):
@@ -31,9 +33,11 @@ class AndorSnap(EnvExperiment):
         for i in range(n):
             frame = self.andor.snap()
             self.set_dataset("andor.image", frame, broadcast=True)
-            if n > 1:
-                print("Frame %d/%d: shape=%s, min=%d, max=%d"
-                      % (i + 1, n, frame.shape, int(frame.min()), int(frame.max())))
+            # Always print stats — the quickest way to tell a real image from a
+            # flat (dark / saturated / uniform) one.
+            print("Frame %d/%d: shape=%s, min=%d, max=%d, mean=%.1f"
+                  % (i + 1, n, frame.shape, int(frame.min()), int(frame.max()),
+                     float(frame.mean())))
 
         # Built-in image applet (works with any frame-producing source).
         self.ccb.issue("create_applet", "Andor Image",
@@ -45,12 +49,12 @@ class AndorSnap(EnvExperiment):
         if self.open_solis_applet:
             db = self.get_device_db()["andor"]
             host, port = db.get("host", "localhost"), db.get("port", 3287)
-            repo_root = "${artiq_root}/repository/applets/andor_solis.py"
+            applet = os.path.abspath(os.path.join(
+                os.path.dirname(__file__), "applets", "andor_solis.py"))
             self.ccb.issue(
                 "create_applet", "Andor Solis",
-                "python3 " + repo_root
-                + " --andor-server %s --andor-port %d --img andor.image"
-                % (host, port),
+                "%s %s --andor-server %s --andor-port %d --img andor.image"
+                % (sys.executable, applet, host, port),
                 group="andor")
 
         print("Done. Frame written to dataset 'andor.image'.")

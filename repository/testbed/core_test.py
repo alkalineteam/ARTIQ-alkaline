@@ -1,11 +1,9 @@
-from artiq.experiment import EnvExperiment, host_only
-from ndscan.experiment import Fragment
+from artiq.experiment import EnvExperiment
 
 class TestCore(EnvExperiment):
 	def build(self):
 		self.setattr_device("core")
 
-	@host_only
 	def run(self):
 		try:
 			import torch
