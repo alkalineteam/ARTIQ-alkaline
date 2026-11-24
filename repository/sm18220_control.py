@@ -7,7 +7,7 @@ from artiq.experiment import *
 # The controller is started with the same current cap: SM18220_MAX_CURRENT in flake.nix
 # and --max-current in device_db.py.
 MAX_CURRENT_SETPOINT = 125.0  # A
-MAX_VOLTAGE_SETPOINT = 18.18  # V, 101% of the 18 V rating
+MAX_VOLTAGE_SETPOINT = 18.0  # V, the supply's maximum (it refuses 18.18 V)
 # wait after On/Off before reading back, so the coil current has settled
 SETTLE_TIME = 1.0  # s
 # after On/Off the measured current must be this close to the setpoint (On) or to 0 (Off),
