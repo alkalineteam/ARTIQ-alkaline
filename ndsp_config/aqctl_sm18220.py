@@ -41,7 +41,8 @@ from sipyco import common_args
 logger = logging.getLogger(__name__)
 
 DEFAULT_PORT = 8462          # fixed on the SM3300 series
-SUPPLY_MAX_VOLTAGE = 18.0    # V, SM18-220 rating
+# V, 101% of the SM18-220's 18 V rating; set_voltage() raises if the supply refuses it
+SUPPLY_MAX_VOLTAGE = 18.18
 SUPPLY_MAX_CURRENT = 220.0   # A, SM18-220 rating
 # SYSTem:REMote:CV?/CC? replies that mean "set over Ethernet". The SM18-220 answers
 # "LOC" when the front panel has control and "ETHERNET" when Ethernet has; the
