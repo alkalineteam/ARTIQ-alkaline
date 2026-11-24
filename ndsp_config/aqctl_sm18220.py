@@ -43,13 +43,15 @@ logger = logging.getLogger(__name__)
 DEFAULT_PORT = 8462          # fixed on the SM3300 series
 SUPPLY_MAX_VOLTAGE = 18.0    # V, SM18-220 rating
 SUPPLY_MAX_CURRENT = 220.0   # A, SM18-220 rating
-# replies to SYSTem:REMote:CV?/CC? that mean "set over Ethernet"
-# (the manual treats "Remote" and "Ethernet" as the same setting)
-ETHERNET_SOURCES = ("remote", "ethernet", "eth")
+# SYSTem:REMote:CV?/CC? replies that mean "set over Ethernet". The SM18-220 answers
+# "LOC" when the front panel has control and "ETHERNET" when Ethernet has; the
+# manual treats Remote and Ethernet as the same, so only the first three letters
+# are compared.
+ETHERNET_SOURCES = ("REM", "ETH")
 
 
 def _is_ethernet(source):
-    return source.strip().lower() in ETHERNET_SOURCES
+    return source.strip().upper()[:3] in ETHERNET_SOURCES
 
 
 class SM18220Controller:

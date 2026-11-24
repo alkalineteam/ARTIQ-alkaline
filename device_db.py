@@ -600,11 +600,12 @@ device_db["led2"] = {
 
 # --- NDSP controllers (ARTIQ-alkaline) ---
 # Delta Elektronika SM18-220 power supply (NDSP controller, SCPI over Ethernet, port 8462).
-# TODO: set the supply's IP here and as SM18220_IP in flake.nix; the two must match.
-sm18220_ip = "TODO"
+# The IP and current cap must match SM18220_IP and SM18220_MAX_CURRENT in flake.nix.
+sm18220_ip = "192.168.1.90"
+sm18220_max_current = 125  # A, coil limit
 device_db["sm18220"] = {
     "type": "controller",
     "host": "::1",
     "port": 3291,
-    "command": "python3 /home/artiq/ARTIQ-alkaline/ndsp_config/aqctl_sm18220.py -p {port} --bind {bind} --ip " + sm18220_ip
+    "command": "python3 /home/artiq/ARTIQ-alkaline/ndsp_config/aqctl_sm18220.py -p {port} --bind {bind} --ip " + sm18220_ip + " --max-current " + str(sm18220_max_current)
 }

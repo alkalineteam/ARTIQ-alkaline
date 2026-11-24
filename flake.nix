@@ -755,14 +755,15 @@ EOF
 
             # Start this experiment's NDSP controllers. Set ARTIQ_NO_CONTROLLERS=1 to skip them,
             # e.g. on a laptop that should not talk to the lab hardware.
-            # Each entry is name:port:ip and starts ndsp_config/aqctl_<name>.py; the IP must
-            # match the one in device_db.py.
-            SM18220_IP="TODO"  # Delta Elektronika SM18-220 PSU: set its IP here and in device_db.py
+            # Each entry is name:port:ip[:extra args] and starts ndsp_config/aqctl_<name>.py;
+            # the IP and extra args must match the controller's entry in device_db.py.
+            SM18220_IP="192.168.1.90"  # Delta Elektronika SM18-220 PSU; must match device_db.py
+            SM18220_MAX_CURRENT=125    # A, coil limit; must match device_db.py and repository/sm18220_control.py
             if [ -n "$ARTIQ_NO_CONTROLLERS" ]; then
               echo "ARTIQ_NO_CONTROLLERS is set: not starting NDSP controllers"
             else
-              for spec in "sm18220:3291:$SM18220_IP"; do
-                IFS=: read -r LNAME LPORT LIP <<< "$spec"
+              for spec in "sm18220:3291:$SM18220_IP:--max-current $SM18220_MAX_CURRENT"; do
+                IFS=: read -r LNAME LPORT LIP LARGS <<< "$spec"
                 L_SCRIPT="$REPO_ROOT/ndsp_config/aqctl_$LNAME.py"
                 L_PIDFILE="/tmp/aqctl_$LNAME.pid"
                 if [ "$LIP" = "TODO" ]; then
@@ -772,7 +773,7 @@ EOF
                     echo "$LNAME controller already running (PID $(cat $L_PIDFILE))"
                   else
                     echo "Starting $LNAME NDSP controller..."
-                    python3 "$L_SCRIPT" -p "$LPORT" --bind ::1 --ip "$LIP" &
+                    python3 "$L_SCRIPT" -p "$LPORT" --bind ::1 --ip "$LIP" $LARGS &
                     L_PID=$!
                     echo $L_PID > "$L_PIDFILE"
                     disown $L_PID
